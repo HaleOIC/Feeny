@@ -1,0 +1,10 @@
+Create empty vector.
+[]
+Add some elements.
+[2, 10, 22, 17, 23, 2, 7]
+Retrieving some elements.
+v[2] = 22.
+v[4] = 23.
+v[1] = 10.
+Setting first 3 elements to 0.
+[0, 0, 0, 17, 23, 2, 7]
