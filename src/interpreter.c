@@ -220,6 +220,44 @@ static int check_print_exp_args_num(char *format, int n) {
     return STATUS_OK;
 }
 
+static Entry *lookup_entry(EnvObj *env, char *name) {
+    // Search entry in current env
+    Entry *entry = get_entry(env, name);
+    if (entry) {
+        return entry;
+    }
+
+    // If has parent environment, lookup on parent env
+    if (env->parent && env->parent->tag == ENV_OBJ) {
+        return lookup_entry((EnvObj *)env->parent, name);
+    }
+
+    // Can not find this entry in any envs, return NULL
+    return NULL;
+}
+
+static void copy_parent_entries(EnvObj *obj, Obj *parent) {
+    // Base case: if parent is null or not an environment object
+    if (!parent || parent->tag != ENV_OBJ) {
+        return;
+    }
+
+    EnvObj *parent_env = (EnvObj *)parent;
+
+    // First, recursively handle parent's parent
+    copy_parent_entries(obj, parent_env->parent);
+
+    // Then copy current parent's entries
+    for (int i = 0; i < parent_env->names->size; i++) {
+        char *name = (char *)vector_get(parent_env->names, i);
+        // Check if property already exists in child
+        if (!lookup_entry(obj, name)) {
+            Entry *entry = (Entry *)vector_get(parent_env->entries, i);
+            add_entry(obj, name, entry);
+        }
+    }
+}
+
 static void eval_slot(EnvObj *env, SlotStmt *stmt) {
     switch (stmt->tag) {
 
@@ -253,22 +291,6 @@ static void eval_slot(EnvObj *env, SlotStmt *stmt) {
         printf("Error: Unknown slot statement type\n");
         break;
     }
-}
-
-static Entry *lookup_entry(EnvObj *env, char *name) {
-    // Search entry in current env
-    Entry *entry = get_entry(env, name);
-    if (entry) {
-        return entry;
-    }
-
-    // If has parent environment, lookup on parent env
-    if (env->parent && env->parent->tag == ENV_OBJ) {
-        return lookup_entry((EnvObj *)env->parent, name);
-    }
-
-    // Can not find this entry in any envs, return NULL
-    return NULL;
 }
 
 void print_obj(Obj *obj) {
@@ -359,14 +381,7 @@ Obj *eval_exp(EnvObj *env, Exp *exp) {
 
         EnvObj *obj = make_env_obj((Obj *)env);
 
-        if (parent->tag == ENV_OBJ) {
-            EnvObj *parent_env = (EnvObj *)parent;
-            for (int i = 0; i < parent_env->names->size; i++) {
-                char *name = (char *)vector_get(parent_env->names, i);
-                Entry *entry = (Entry *)vector_get(parent_env->entries, i);
-                add_entry(obj, name, entry);
-            }
-        }
+        copy_parent_entries(obj, parent);
 
         for (int i = 0; i < e->nslots; i++) {
             eval_slot(obj, e->slots[i]);
