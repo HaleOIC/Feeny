@@ -1,0 +1,1090 @@
+Interpreting Bytecode Program:
+Constants :
+   #0: String("conseq55")
+   #1: String("end56")
+   #2: String("and")
+   #3: Method(#2, nargs:2, nlocals:0) :
+         get local 0
+         branch #0
+         get local 0
+         goto #1
+      label #0
+         get local 1
+      label #1
+         return
+   #4: String("conseq57")
+   #5: String("end58")
+   #6: String("or")
+   #7: Method(#6, nargs:2, nlocals:0) :
+         get local 0
+         branch #4
+         get local 1
+         goto #5
+      label #4
+         get local 0
+      label #5
+         return
+   #8: String("conseq59")
+   #9: String("end60")
+   #10: Int(0)
+   #11: Null
+   #12: String("not")
+   #13: Method(#12, nargs:1, nlocals:0) :
+         get local 0
+         branch #8
+         lit #10
+         goto #9
+      label #8
+         lit #11
+      label #9
+         return
+   #14: Int(10)
+   #15: String("check-array")
+   #16: Slot(#15)
+   #17: String("test61")
+   #18: String("loop62")
+   #19: String("set")
+   #20: Int(1)
+   #21: String("add")
+   #22: String("lt")
+   #23: String("begin-check")
+   #24: Method(#23, nargs:0, nlocals:1) :
+         lit #10
+         set local 0
+         drop
+         goto #17
+      label #18
+         get global #15
+         get local 0
+         lit #10
+         call-slot #19 3
+         drop
+         get local 0
+         lit #20
+         call-slot #21 2
+         set local 0
+         drop
+      label #17
+         get local 0
+         lit #14
+         call-slot #22 2
+         branch #18
+         lit #11
+         return
+   #25: String("get")
+   #26: String("check")
+   #27: Method(#26, nargs:1, nlocals:0) :
+         get global #15
+         get local 0
+         get global #15
+         get local 0
+         call-slot #25 2
+         lit #20
+         call-slot #21 2
+         call-slot #19 3
+         return
+   #28: String("test63")
+   #29: String("loop64")
+   #30: String("le")
+   #31: String("check-good?")
+   #32: Method(#31, nargs:0, nlocals:2) :
+         lit #20
+         set local 0
+         drop
+         lit #20
+         set local 1
+         drop
+         goto #28
+      label #29
+         get local 0
+         get global #15
+         get local 1
+         call-slot #25 2
+         lit #20
+         call-slot #30 2
+         call #2 2
+         set local 0
+         drop
+         get local 1
+         lit #20
+         call-slot #21 2
+         set local 1
+         drop
+      label #28
+         get local 1
+         lit #14
+         call-slot #22 2
+         branch #29
+         lit #11
+         drop
+         get local 0
+         return
+   #33: String("conseq65")
+   #34: String("end66")
+   #35: Int(81)
+   #36: String("eq")
+   #37: String("conseq67")
+   #38: String("end68")
+   #39: String("pos")
+   #40: String("solvehelper")
+   #41: String("test69")
+   #42: String("loop70")
+   #43: String("conseq71")
+   #44: String("end72")
+   #45: String("set-pos")
+   #46: String("conseq73")
+   #47: String("end74")
+   #48: String("good?")
+   #49: Int(9)
+   #50: String("conseq75")
+   #51: String("end76")
+   #52: Method(#40, nargs:2, nlocals:2) :
+         get local 1
+         lit #35
+         call-slot #36 2
+         branch #33
+         get local 0
+         get local 1
+         call-slot #39 2
+         lit #10
+         call-slot #36 2
+         branch #37
+         get local 0
+         get local 1
+         lit #20
+         call-slot #21 2
+         call #40 2
+         goto #38
+      label #37
+         lit #11
+         set local 2
+         drop
+         lit #20
+         set local 3
+         drop
+         goto #41
+      label #42
+         get local 2
+         call #12 1
+         branch #43
+         lit #11
+         goto #44
+      label #43
+         get local 0
+         get local 1
+         get local 3
+         call-slot #45 3
+         drop
+         get local 0
+         call-slot #48 1
+         branch #46
+         lit #11
+         goto #47
+      label #46
+         get local 2
+         get local 0
+         get local 1
+         lit #20
+         call-slot #21 2
+         call #40 2
+         call #6 2
+         set local 2
+      label #47
+      label #44
+         drop
+         get local 3
+         lit #20
+         call-slot #21 2
+         set local 3
+         drop
+      label #41
+         get local 3
+         lit #49
+         call-slot #30 2
+         branch #42
+         lit #11
+         drop
+         get local 2
+         branch #50
+         get local 0
+         get local 1
+         lit #10
+         call-slot #45 3
+         drop
+         lit #11
+         goto #51
+      label #50
+         get local 2
+      label #51
+      label #38
+         goto #34
+      label #33
+         lit #10
+      label #34
+         return
+   #53: String("mul")
+   #54: String("array")
+   #55: Slot(#54)
+   #56: Method(#39, nargs:2, nlocals:0) :
+         get local 0
+         slot #54
+         get local 1
+         call-slot #25 2
+         return
+   #57: Method(#45, nargs:3, nlocals:0) :
+         get local 0
+         slot #54
+         get local 1
+         get local 2
+         call-slot #19 3
+         return
+   #58: Method(#25, nargs:3, nlocals:0) :
+         get local 0
+         slot #54
+         get local 1
+         lit #49
+         call-slot #53 2
+         get local 2
+         call-slot #21 2
+         call-slot #25 2
+         return
+   #59: Method(#19, nargs:4, nlocals:0) :
+         get local 0
+         slot #54
+         get local 1
+         lit #49
+         call-slot #53 2
+         get local 2
+         call-slot #21 2
+         get local 3
+         call-slot #19 3
+         return
+   #60: String("test78")
+   #61: String("loop79")
+   #62: String("test80")
+   #63: String("loop81")
+   #64: String("conseq82")
+   #65: String("end83")
+   #66: String("gt")
+   #67: String(" ")
+   #68: String("conseq84")
+   #69: String("end85")
+   #70: String("~")
+   #71: String("_")
+   #72: String("\n")
+   #73: String("print")
+   #74: Method(#73, nargs:1, nlocals:2) :
+         lit #10
+         set local 1
+         drop
+         goto #60
+      label #61
+         lit #10
+         set local 2
+         drop
+         goto #62
+      label #63
+         get local 2
+         lit #10
+         call-slot #66 2
+         branch #64
+         lit #11
+         goto #65
+      label #64
+         printf #67 0
+      label #65
+         drop
+         get local 0
+         get local 1
+         get local 2
+         call-slot #25 3
+         lit #10
+         call-slot #36 2
+         branch #68
+         get local 0
+         get local 1
+         get local 2
+         call-slot #25 3
+         printf #70 1
+         goto #69
+      label #68
+         printf #71 0
+      label #69
+         drop
+         get local 2
+         lit #20
+         call-slot #21 2
+         set local 2
+         drop
+      label #62
+         get local 2
+         lit #49
+         call-slot #22 2
+         branch #63
+         lit #11
+         drop
+         printf #72 0
+         drop
+         get local 1
+         lit #20
+         call-slot #21 2
+         set local 1
+         drop
+      label #60
+         get local 1
+         lit #49
+         call-slot #22 2
+         branch #61
+         lit #11
+         return
+   #75: String("test86")
+   #76: String("loop87")
+   #77: String("test88")
+   #78: String("loop89")
+   #79: String("test90")
+   #80: String("loop91")
+   #81: String("test92")
+   #82: String("loop93")
+   #83: String("test94")
+   #84: String("loop95")
+   #85: Int(3)
+   #86: String("div")
+   #87: String("mod")
+   #88: String("test96")
+   #89: String("loop97")
+   #90: String("test98")
+   #91: String("loop99")
+   #92: Method(#48, nargs:1, nlocals:8) :
+         lit #20
+         set local 1
+         drop
+         lit #10
+         set local 2
+         drop
+         goto #75
+      label #76
+         call #23 0
+         drop
+         lit #10
+         set local 3
+         drop
+         goto #77
+      label #78
+         get local 0
+         get local 2
+         get local 3
+         call-slot #25 3
+         call #26 1
+         drop
+         get local 3
+         lit #20
+         call-slot #21 2
+         set local 3
+         drop
+      label #77
+         get local 3
+         lit #49
+         call-slot #22 2
+         branch #78
+         lit #11
+         drop
+         get local 1
+         call #31 0
+         call #2 2
+         set local 1
+         drop
+         get local 2
+         lit #20
+         call-slot #21 2
+         set local 2
+         drop
+      label #75
+         get local 2
+         lit #49
+         call-slot #22 2
+         branch #76
+         lit #11
+         drop
+         lit #10
+         set local 3
+         drop
+         goto #79
+      label #80
+         call #23 0
+         drop
+         lit #10
+         set local 4
+         drop
+         goto #81
+      label #82
+         get local 0
+         get local 4
+         get local 3
+         call-slot #25 3
+         call #26 1
+         drop
+         get local 4
+         lit #20
+         call-slot #21 2
+         set local 4
+         drop
+      label #81
+         get local 4
+         lit #49
+         call-slot #22 2
+         branch #82
+         lit #11
+         drop
+         get local 1
+         call #31 0
+         call #2 2
+         set local 1
+         drop
+         get local 3
+         lit #20
+         call-slot #21 2
+         set local 3
+         drop
+      label #79
+         get local 3
+         lit #49
+         call-slot #22 2
+         branch #80
+         lit #11
+         drop
+         lit #10
+         set local 4
+         drop
+         goto #83
+      label #84
+         get local 4
+         lit #85
+         call-slot #86 2
+         lit #85
+         call-slot #53 2
+         set local 5
+         drop
+         get local 4
+         lit #85
+         call-slot #87 2
+         lit #85
+         call-slot #53 2
+         set local 6
+         drop
+         call #23 0
+         drop
+         get local 5
+         set local 7
+         drop
+         goto #88
+      label #89
+         get local 6
+         set local 8
+         drop
+         goto #90
+      label #91
+         get local 0
+         get local 7
+         get local 8
+         call-slot #25 3
+         call #26 1
+         drop
+         get local 8
+         lit #20
+         call-slot #21 2
+         set local 8
+         drop
+      label #90
+         get local 8
+         get local 6
+         lit #85
+         call-slot #21 2
+         call-slot #22 2
+         branch #91
+         lit #11
+         drop
+         get local 7
+         lit #20
+         call-slot #21 2
+         set local 7
+         drop
+      label #88
+         get local 7
+         get local 5
+         lit #85
+         call-slot #21 2
+         call-slot #22 2
+         branch #89
+         lit #11
+         drop
+         get local 1
+         call #31 0
+         call #2 2
+         set local 1
+         drop
+         get local 4
+         lit #20
+         call-slot #21 2
+         set local 4
+         drop
+      label #83
+         get local 4
+         lit #49
+         call-slot #22 2
+         branch #84
+         lit #11
+         drop
+         get local 1
+         return
+   #93: String("solve")
+   #94: Method(#93, nargs:1, nlocals:0) :
+         get local 0
+         lit #10
+         call #40 2
+         return
+   #95: Class(#55, #56, #57, #58, #59, #74, #92, #94)
+   #96: String("board")
+   #97: Method(#96, nargs:0, nlocals:0) :
+         lit #11
+         lit #49
+         lit #49
+         call-slot #53 2
+         lit #10
+         array
+         object #95
+         return
+   #98: Int(8)
+   #99: Int(2)
+   #100: Int(4)
+   #101: Int(5)
+   #102: Int(6)
+   #103: Int(7)
+   #104: String("=== Given Puzzle ===\n")
+   #105: String("\n=== Solution ===\n")
+   #106: String("main")
+   #107: Method(#106, nargs:0, nlocals:1) :
+         call #96 0
+         set local 0
+         drop
+         get local 0
+         lit #10
+         lit #10
+         lit #98
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #20
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #85
+         lit #20
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #101
+         lit #85
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #102
+         lit #100
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #103
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #10
+         lit #98
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #10
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #20
+         lit #85
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #99
+         lit #101
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #85
+         lit #103
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #100
+         lit #98
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #101
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #103
+         lit #102
+         call-slot #19 4
+         drop
+         get local 0
+         lit #20
+         lit #98
+         lit #99
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #10
+         lit #100
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #20
+         lit #103
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #85
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #101
+         lit #102
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #103
+         lit #49
+         call-slot #19 4
+         drop
+         get local 0
+         lit #99
+         lit #98
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #10
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #20
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #85
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #101
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #103
+         lit #99
+         call-slot #19 4
+         drop
+         get local 0
+         lit #85
+         lit #98
+         lit #100
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #10
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #20
+         lit #20
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #85
+         lit #85
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #101
+         lit #101
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #103
+         lit #98
+         call-slot #19 4
+         drop
+         get local 0
+         lit #100
+         lit #98
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #10
+         lit #99
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #20
+         lit #98
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #85
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #101
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #103
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #101
+         lit #98
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #10
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #20
+         lit #99
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #85
+         lit #102
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #101
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #103
+         lit #85
+         call-slot #19 4
+         drop
+         get local 0
+         lit #102
+         lit #98
+         lit #49
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #10
+         lit #20
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #20
+         lit #49
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #99
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #85
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #100
+         lit #103
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #101
+         lit #99
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #102
+         lit #102
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #103
+         lit #100
+         call-slot #19 4
+         drop
+         get local 0
+         lit #103
+         lit #98
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #10
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #20
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #99
+         lit #98
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #85
+         lit #101
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #100
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #101
+         lit #49
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #102
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #103
+         lit #10
+         call-slot #19 4
+         drop
+         get local 0
+         lit #98
+         lit #98
+         lit #20
+         call-slot #19 4
+         drop
+         printf #104 0
+         drop
+         get local 0
+         call-slot #73 1
+         drop
+         printf #105 0
+         drop
+         get local 0
+         call-slot #93 1
+         drop
+         get local 0
+         call-slot #73 1
+         return
+   #108: String("entry100")
+   #109: Method(#108, nargs:0, nlocals:0) :
+         lit #14
+         lit #10
+         array
+         set global #15
+         drop
+         call #106 0
+         drop
+         lit #11
+         return
+Globals :
+   #3
+   #7
+   #13
+   #16
+   #24
+   #27
+   #32
+   #52
+   #97
+   #107
+Entry : #109

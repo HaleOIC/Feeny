@@ -1,0 +1,50 @@
+Interpreting Bytecode Program:
+Constants :
+   #0: Int(3)
+   #1: String("three")
+   #2: Method(#1, nargs:0, nlocals:0) :
+         lit #0
+         return
+   #3: String("Hello ~ ")
+   #4: String("hello")
+   #5: Method(#4, nargs:1, nlocals:0) :
+         get local 0
+         printf #3 1
+         return
+   #6: String("World ~ ~\n")
+   #7: String("world")
+   #8: Method(#7, nargs:2, nlocals:0) :
+         get local 0
+         get local 1
+         printf #6 2
+         return
+   #9: Int(10)
+   #10: Int(4)
+   #11: String("main")
+   #12: Method(#11, nargs:0, nlocals:2) :
+         call #1 0
+         set local 0
+         drop
+         get local 0
+         call #4 1
+         drop
+         lit #9
+         set local 1
+         drop
+         lit #10
+         get local 1
+         call #7 2
+         return
+   #13: Null
+   #14: String("entry36")
+   #15: Method(#14, nargs:0, nlocals:0) :
+         call #11 0
+         drop
+         lit #13
+         return
+Globals :
+   #2
+   #5
+   #8
+   #12
+Entry : #15

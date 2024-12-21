@@ -1,0 +1,39 @@
+Interpreting Bytecode Program:
+Constants :
+   #0: String("conseq36")
+   #1: String("end37")
+   #2: Null
+   #3: String("World")
+   #4: String("Hello")
+   #5: String("conseq38")
+   #6: String("end39")
+   #7: Int(0)
+   #8: String("World\n")
+   #9: String("Hello\n")
+   #10: String("main")
+   #11: Method(#10, nargs:0, nlocals:0) :
+         lit #2
+         branch #0
+         printf #3 0
+         goto #1
+      label #0
+         printf #4 0
+      label #1
+         drop
+         lit #7
+         branch #5
+         printf #8 0
+         goto #6
+      label #5
+         printf #9 0
+      label #6
+         return
+   #12: String("entry40")
+   #13: Method(#12, nargs:0, nlocals:0) :
+         call #10 0
+         drop
+         lit #2
+         return
+Globals :
+   #11
+Entry : #13
