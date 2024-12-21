@@ -8,11 +8,11 @@ SCRIPTS_DIR = $(PWD)/scripts
 
 # Default target: build and run
 .PHONY: all
-all: build run
+all: build_docker run_docker
 
 # Build the Docker image for x86_64 platform
-.PHONY: build
-build:
+.PHONY: build_docker
+build_docker:
 	@echo "Building Docker image for x86_64 platform..."
 	docker build --platform=linux/amd64 -t $(DOCKER_IMAGE_NAME) .
 
@@ -21,8 +21,8 @@ build:
 # - Mounts current directory to /app
 # - Sets working directory to /app
 # - Runs in interactive mode with TTY
-.PHONY: run
-run:
+.PHONY: run_docker
+run_docker:
 	@echo "Starting x86_64 development environment..."
 	@if [ "$$(docker ps -aq -f name=^/${DOCKER_CONTAINER_NAME}$$)" ]; then \
 		echo "Stopping existing container..."; \
@@ -44,18 +44,18 @@ run:
 		/bin/bash
 
 # Stop and remove the container if it exists
-.PHONY: stop
-stop:
+.PHONY: stop_docker
+stop_docker:
 	@echo "Stopping container..."
 	@docker stop $(DOCKER_CONTAINER_NAME) 2>/dev/null || true
 	@docker rm $(DOCKER_CONTAINER_NAME) 2>/dev/null || true
 
 # Clean up everything - stops container and removes image
-.PHONY: clean
-clean: stop
+.PHONY: clean_docker
+clean_docker: stop
 	@echo "Cleaning up..."
 	@docker rmi $(DOCKER_IMAGE_NAME) 2>/dev/null || true
 
 # Rebuild everything from scratch
-.PHONY: rebuild
-rebuild: clean build run
+.PHONY: rebuild_docker
+rebuild_docker: clean build_docker run_docker
