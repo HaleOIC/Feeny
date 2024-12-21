@@ -1,5 +1,4 @@
 *.o
-*.out
 *.exe
 *.dll
 *.so
