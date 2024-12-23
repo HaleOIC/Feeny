@@ -102,14 +102,21 @@ int main(int argc, char **argv) {
             fprintf(stderr, "Error: Failed to load bytecode from file: %s\n", filename);
             return 1;
         }
+
         if (verbose)
-            printf("Interpreting bytecode...\n");
-        interpret_bc(p);
-        // Uncomment if VM implementation is ready
-        // if (verbose) printf("Initializing VM...\n");
-        // initvm(link_program(p));
-        // if (verbose) printf("Running VM...\n");
-        // runvm();
+            printf("Initializing VM...\n");
+
+        // Allocate new machine and link the program to it
+        Machine *m = (Machine *)malloc(sizeof(Machine));
+        initvm(p, m);
+
+        if (verbose)
+            printf("Running VM...\n");
+
+        // Actually run the vm to get output
+        runvm(m);
+
+        free(m);
         break;
     }
     }

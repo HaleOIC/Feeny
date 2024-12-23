@@ -15,8 +15,13 @@ RUN apt-get update && apt-get install -y \
     valgrind \
     strace \
     ltrace \
+    libc6-dbg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN echo "kernel.yama.ptrace_scope = 0" > /etc/sysctl.d/10-ptrace.conf
+RUN echo "kernel.core_pattern = core" > /etc/sysctl.d/10-core.conf
+
 
 WORKDIR /app
 

@@ -30,4 +30,16 @@ void vector_set(Vector *v, int i, void *x);
 void vector_set_length(Vector *v, int len, void *x);
 int vector_size(Vector *v);
 
+//============================================================
+//========================= MAP ==============================
+//============================================================
+
+typedef struct {
+    Vector *names;
+    Vector *values;
+} Map;
+Map *newMap();
+void *findByName(Map *, char *);
+void addNewTuple(Map *, char *, void *);
+
 #endif

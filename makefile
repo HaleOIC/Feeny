@@ -34,6 +34,10 @@ run_docker:
 		--platform linux/amd64 \
 		--name ${DOCKER_CONTAINER_NAME} \
 		--privileged \
+		--cap-add=SYS_PTRACE \
+		--cap-add=SYS_ADMIN \
+		--security-opt seccomp=unconfined \
+		--security-opt apparmor=unconfined \
 		--memory 16g \
 		--memory-swap 32g \
 		--ulimit nofile=65536:65536 \
@@ -59,3 +63,7 @@ clean_docker: stop
 # Rebuild everything from scratch
 .PHONY: rebuild_docker
 rebuild_docker: clean build_docker run_docker
+
+.PHONY: compile
+compile: 
+	gcc -g -O3 -I./include ./src/*.c -o ./bin/cfeeny -Wno-int-to-void-pointer-cast

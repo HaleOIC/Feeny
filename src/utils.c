@@ -127,3 +127,45 @@ void vector_set(Vector *v, int i, void *x) {
 int vector_size(Vector *v) {
     return v->size;
 }
+
+//============================================================
+//========================= MAP ==============================
+//============================================================
+
+Map *newMap() {
+    Map *new = (Map *)malloc(sizeof(Map));
+    new->names = make_vector();
+    new->values = make_vector();
+    return new;
+}
+
+void *findByName(Map *map, char *name) {
+    int pos = -1;
+    for (int i = 0; i < vector_size(map->names); i++) {
+        if (strcmp(name, (char *)vector_get(map->names, i)) == 0) {
+            pos = i;
+            break;
+        }
+    }
+    if (pos == -1) {
+        return NULL;
+    } else {
+        return vector_get(map->values, pos);
+    }
+}
+
+void addNewTuple(Map *map, char *name, void *value) {
+    int pos = -1;
+    for (int i = 0; i < vector_size(map->names); i++) {
+        if (strcmp(name, (char *)vector_get(map->names, i)) == 0) {
+            pos = i;
+            break;
+        }
+    }
+    if (pos == -1) {
+        vector_add(map->names, name);
+        vector_add(map->values, value);
+    } else {
+        vector_set(map->values, pos, value);
+    }
+}
