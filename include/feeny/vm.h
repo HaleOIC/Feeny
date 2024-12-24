@@ -33,6 +33,7 @@ void initvm(Program *, Machine *);
 /* Run vm to execute source program */
 void runvm(Machine *);
 /* Handle all kinds of instructions */
+static MethodValue *lookup_method(EnvObj *obj, char *method_name);
 static void handle_lit_instr(Machine *, LitIns *);
 static void handle_label_instr(Machine *, LabelIns *);
 static void handle_print_instr(Machine *, PrintfIns *);
