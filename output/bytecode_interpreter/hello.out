@@ -1,17 +1,1 @@
-Interpreting Bytecode Program:
-Constants :
-   #0: String("Hello World\n")
-   #1: String("main")
-   #2: Method(#1, nargs:0, nlocals:0) :
-         printf #0 0
-         return
-   #3: Null
-   #4: String("entry35")
-   #5: Method(#4, nargs:0, nlocals:0) :
-         call #1 0
-         drop
-         lit #3
-         return
-Globals :
-   #2
-Entry : #5
+Hello World
