@@ -28,3 +28,6 @@ test lists
 test vector
 test sudoku
 test sudoku2
+test hanoi
+test morehanoi
+test stack
