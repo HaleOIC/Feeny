@@ -231,7 +231,7 @@ static void handle_object_instr(Machine *machine, ObjectIns *ins) {
     // Pop initial values
     for (int i = nslots - 1; i >= 0; i--) {
         Obj *obj = vector_pop(machine->state->stack);
-        vector_set(values, (intptr_t)vector_get(ids, nslots - 1 - i), obj);
+        vector_set(values, (intptr_t)vector_get(ids, i), obj);
     }
 
     Obj *parent = vector_pop(machine->state->stack);
