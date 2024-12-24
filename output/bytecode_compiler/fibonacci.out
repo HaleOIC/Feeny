@@ -1,0 +1,5 @@
+Mode: Bytecode
+Input file: ../output/bytecode_compiler/fibonacci.ast
+Loading ast from file...
+Compiling Program:
+defn fib (n) : (if n.eq(0) : (1) else : (if n.eq(1) : (1) else : (var a = 1 var b = 1 while n.ge(2) : (var c = a.add(b) a = b b = c n = n.sub(1)) b))) defn main () : (var i = 0 while i.lt(20) : (printf("Fib(~) = ~\n", i, fib(i)) i = i.add(1))) main()

@@ -1,0 +1,5 @@
+Mode: Bytecode
+Input file: ../output/bytecode_compiler/hello8.ast
+Loading ast from file...
+Compiling Program:
+defn main () : (if null : (printf("Hello")) else : (printf("World")) if 0 : (printf("Hello\n")) else : (printf("World\n"))) main()

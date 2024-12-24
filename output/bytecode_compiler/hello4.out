@@ -1,0 +1,5 @@
+Mode: Bytecode
+Input file: ../output/bytecode_compiler/hello4.ast
+Loading ast from file...
+Compiling Program:
+defn hello (i) : (printf("Hello ~ ", i)) defn world (j, k) : (printf("World ~ ~\n", j, k)) defn main () : (hello(3) world(4, 5)) main()

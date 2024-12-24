@@ -1,5 +1,6 @@
 #include "feeny/ast.h"
 #include "feeny/bytecode.h"
+#include "feeny/compiler.h"
 #include "feeny/interpreter.h"
 #include "feeny/utils.h"
 #include "feeny/vm.h"
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
     int option;
     int option_index = 0;
 
-    while ((option = getopt_long(argc, argv, "abvh",
+    while ((option = getopt_long(argc, argv, "abvhf",
                                  long_options, &option_index)) != -1) {
         switch (option) {
         case 'a':
@@ -119,6 +120,33 @@ int main(int argc, char **argv) {
         free(m);
         break;
     }
+    case MODE_FULL: {
+        if (verbose) {
+            printf("Loading ast from file...\n");
+        }
+        ScopeStmt *stmt = read_ast(filename);
+        if (stmt == NULL) {
+            fprintf(stderr, "Error: Failed to read AST from file: %s\n", filename);
+            return 1;
+        }
+        Program *program = compile(stmt);
+        if (verbose)
+            printf("Initializing VM...\n");
+
+        // Allocate new machine and link the program to it
+        Machine *machine = (Machine *)malloc(sizeof(Machine));
+        initvm(program, machine);
+
+        if (verbose)
+            printf("Running VM...\n");
+
+        // Actually run the vm to get output
+        runvm(machine);
+
+        free(machine);
+        break;
     }
+    }
+
     return 0;
 }

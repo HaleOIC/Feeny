@@ -1,0 +1,5 @@
+Mode: Bytecode
+Input file: ../output/bytecode_compiler/hanoi.ast
+Loading ast from file...
+Compiling Program:
+defn selection (n) : (if n.eq(1) : (printf("A")) else : (if n.eq(2) : (printf("B")) else : (printf("C")))) defn print (from, to) : (printf("Moving plate from ") selection(from) printf(" Stack to ") selection(to) printf(" Stack\n")) defn hanoi (n, from, to, aux) : (if n.gt(0) : (hanoi(n.sub(1), from, aux, to) print(from, to) hanoi(n.sub(1), aux, to, from)) else : (null)) hanoi(6, 1, 2, 3)
