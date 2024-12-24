@@ -4,6 +4,27 @@
 #include <string.h>
 #include <sys/mman.h>
 
+// #define DEBUG 1
+
+static MethodValue *lookup_method(EnvObj *obj, char *method_name) {
+    if (!obj) {
+        return NULL;
+    }
+
+    MethodValue *rv = (MethodValue *)get_entry(obj, method_name);
+    if (rv != NULL) {
+        if (rv->tag != METHOD_VAL) {
+            fprintf(stderr, "Error: Given %s is not a method!\n", method_name);
+            exit(1);
+        }
+        return rv;
+    }
+    if (obj->parent && obj->parent->tag == ENV_OBJ) {
+        return lookup_method((EnvObj *)obj->parent, method_name);
+    }
+    return NULL;
+}
+
 static void make_frame(Machine *machine, MethodValue *method) {
     // Allocate memory for new frame
     Frame *frame = (Frame *)malloc(sizeof(Frame));
@@ -13,11 +34,11 @@ static void make_frame(Machine *machine, MethodValue *method) {
     }
 
     // Initialize frame components
-    frame->labels = newMap();          // Create new label map for this frame
-    frame->locals = make_vector();     // Create vector for local variables
-    frame->codes = method->code;       // Point to method's code
-    frame->prev = machine->state->cur; // Link to previous frame
-    frame->ra = machine->state->ip;    // Save current ip as return address
+    frame->labels = newMap();           // Create new label map for this frame
+    frame->locals = make_vector();      // Create vector for local variables
+    frame->codes = method->code;        // Point to method's code
+    frame->prev = machine->state->cur;  // Link to previous frame
+    frame->ra = machine->state->ip + 1; // Save current ip as return address
 
     // Pre-allocate space for arguments and local variables
     vector_set_length(frame->locals, method->nargs + method->nlocals, NULL);
@@ -102,6 +123,8 @@ void initvm(Program *program, Machine *machine) {
     machine->state = initState(program);
     MethodValue *method = vector_get(program->values, program->entry);
     make_frame(machine, method);
+    machine->state->cur->ra = -1;
+    machine->state->cur->prev = NULL;
 }
 
 static void handle_lit_instr(Machine *machine, LitIns *ins) {
@@ -231,7 +254,7 @@ static void handle_slot_instr(Machine *machine, SlotIns *ins) {
     }
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    Obj *obj = (Obj *)get_entry((EnvObj *)obj, slotName);
+    Obj *obj = (Obj *)get_entry((EnvObj *)receiver, slotName);
     if (!obj) {
         fprintf(stderr, "Invalid slot access\n");
         exit(1);
@@ -242,31 +265,31 @@ static void handle_slot_instr(Machine *machine, SlotIns *ins) {
 
 static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
     Obj *value = vector_pop(machine->state->stack);
-    Obj *obj = vector_pop(machine->state->stack);
+    Obj *receiver = vector_pop(machine->state->stack);
 
-    if (obj->tag != ENV_OBJ) {
+    if (receiver->tag != ENV_OBJ) {
         fprintf(stderr, "Set slot requires object\n");
         exit(1);
     }
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    add_entry((EnvObj *)obj, slotName, (Entry *)obj);
+    add_entry((EnvObj *)receiver, slotName, (Entry *)value);
 
     vector_add(machine->state->stack, value);
 }
 
 static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
     Vector *args = make_vector();
-    for (int i = 0; i < ins->arity; i++) {
+    for (int i = 0; i < ins->arity - 1; i++) {
         vector_add(args, vector_pop(machine->state->stack));
     }
 
     Obj *receiver = vector_pop(machine->state->stack);
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    if (receiver->tag == INT_OBJ || receiver->tag == ARRAY_OBJ) {
+    if (receiver->tag == INT_OBJ) {
         // Handle integer operations
-        if (ins->arity != 1) {
+        if (ins->arity != 2) {
             fprintf(stderr, "Error: Int Object slot invoke must take another argument\n");
             exit(1);
         }
@@ -307,17 +330,18 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         }
 
         vector_add(machine->state->stack, (Obj *)result);
+        machine->state->ip++;
     } else if (receiver->tag == ARRAY_OBJ) {
         ArrayObj *arr = (ArrayObj *)receiver;
 
         if (strcmp(slotName, "set") == 0) {
-            if (ins->arity != 2) {
+            if (ins->arity != 3) {
                 fprintf(stderr, "Error: Array Object set operation must take two arguments\n");
                 exit(1);
             }
 
-            Obj *index = vector_get(args, 0);
-            Obj *value = vector_get(args, 1);
+            Obj *index = vector_get(args, 1);
+            Obj *value = vector_get(args, 0);
 
             if (index->tag != INT_OBJ) {
                 fprintf(stderr, "Error: Array index must be integer\n");
@@ -328,7 +352,7 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             vector_add(machine->state->stack, result);
 
         } else if (strcmp(slotName, "get") == 0) {
-            if (ins->arity != 1) {
+            if (ins->arity != 2) {
                 fprintf(stderr, "Error: Array Object get operation must take one argument\n");
                 exit(1);
             }
@@ -343,7 +367,7 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             vector_add(machine->state->stack, result);
 
         } else if (strcmp(slotName, "length") == 0) {
-            if (ins->arity != 0) {
+            if (ins->arity != 1) {
                 fprintf(stderr, "Error: Array Object length operation takes no arguments\n");
                 exit(1);
             }
@@ -355,15 +379,15 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             fprintf(stderr, "Error: Unsupported Array Object operation: %s\n", slotName);
             exit(1);
         }
-
+        machine->state->ip++;
     } else if (receiver->tag == ENV_OBJ) {
-        MethodValue *method = (MethodValue *)get_entry((EnvObj *)receiver, slotName);
+        MethodValue *method = (MethodValue *)lookup_method((EnvObj *)receiver, slotName);
         if (!method || method->tag != METHOD_VAL) {
             fprintf(stderr, "Undefined function: %s\n", slotName);
             exit(1);
         }
 
-        if (ins->arity != method->nargs - 1) {
+        if (ins->arity != method->nargs) {
             fprintf(stderr, "Wrong number of arguments for function %s\n", slotName);
             exit(1);
         }
@@ -372,8 +396,8 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         make_frame(machine, method);
 
         vector_set(machine->state->cur->locals, 0, receiver);
-        for (int i = 0; i < ins->arity; i++) {
-            vector_set(machine->state->cur->locals, i + 1, vector_get(args, i));
+        for (int i = 0; i < ins->arity - 1; i++) {
+            vector_set(machine->state->cur->locals, ins->arity - i - 1, vector_get(args, i));
         }
     } else {
         fprintf(stderr, "Error: Cannot invoke any operation on Null Object\n");
@@ -400,18 +424,11 @@ static void handle_call_instr(Machine *machine, CallIns *ins) {
         exit(1);
     }
 
-    Vector *args = make_vector();
-    for (int i = 0; i < ins->arity; i++) {
-        vector_add(args, vector_pop(machine->state->stack));
-    }
-
     make_frame(machine, method);
 
     for (int i = 0; i < ins->arity; i++) {
-        vector_set(machine->state->cur->locals, i, vector_get(args, ins->arity - 1 - i));
+        vector_set(machine->state->cur->locals, ins->arity - 1 - i, vector_pop(machine->state->stack));
     }
-
-    vector_free(args);
 }
 static void handle_get_local_instr(Machine *machine, GetLocalIns *ins) {
     Frame *cur = machine->state->cur;
@@ -458,7 +475,7 @@ static void handle_goto_instr(Machine *machine, GotoIns *ins) {
         exit(1);
     }
 
-    machine->state->ip = (int)(intptr_t)target - 1;
+    machine->state->ip = (int)(intptr_t)target;
 }
 
 static void handle_branch_instr(Machine *machine, BranchIns *ins) {
@@ -477,7 +494,9 @@ static void handle_branch_instr(Machine *machine, BranchIns *ins) {
             exit(1);
         }
 
-        machine->state->ip = (int)(intptr_t)target - 1;
+        machine->state->ip = (int)(intptr_t)target;
+    } else {
+        machine->state->ip++;
     }
 }
 
@@ -485,10 +504,7 @@ static void handle_return_instr(Machine *machine) {
     Frame *cur = machine->state->cur;
 
     machine->state->cur = cur->prev;
-
-    if (cur->prev) {
-        machine->state->ip = cur->ra;
-    }
+    machine->state->ip = cur->ra;
 
     vector_free(cur->labels->names);
     vector_free(cur->labels->values);
@@ -506,13 +522,27 @@ void runvm(Machine *machine) {
     Program *program = machine->program;
 
     while (1) {
+
+#ifdef DEBUG
+        printf("cur ip: %d\n", state->ip);
+#endif
+
         // When encounter the end of current frame, break the loop
-        if (state->ip >= vector_size(state->cur->codes)) {
-            if (state->cur->prev == NULL) {
-                break;
-            }
+        if (state->ip == -1 && state->cur == NULL) {
+            break;
         }
+        if (state->ip >= vector_size(state->cur->codes)) {
+            fprintf(stderr, "Error: execute bytecodes out of bound!\n");
+            exit(1);
+        }
+
         ByteIns *instr = (ByteIns *)vector_get(state->cur->codes, state->ip);
+
+#ifdef DEBUG
+        print_ins(instr);
+        printf("\n");
+#endif
+
         switch (instr->tag) {
         case LABEL_OP:
             break;
@@ -536,9 +566,11 @@ void runvm(Machine *machine) {
             break;
         case CALL_SLOT_OP:
             handle_call_slot_instr(machine, (CallSlotIns *)instr);
+            continue;
             break;
         case CALL_OP:
             handle_call_instr(machine, (CallIns *)instr);
+            continue;
             break;
         case GET_LOCAL_OP:
             handle_get_local_instr(machine, (GetLocalIns *)instr);
@@ -554,12 +586,15 @@ void runvm(Machine *machine) {
             break;
         case GOTO_OP:
             handle_goto_instr(machine, (GotoIns *)instr);
+            continue;
             break;
         case BRANCH_OP:
             handle_branch_instr(machine, (BranchIns *)instr);
+            continue;
             break;
         case RETURN_OP:
             handle_return_instr(machine);
+            continue;
             break;
         case DROP_OP:
             handle_drop_instr(machine);
