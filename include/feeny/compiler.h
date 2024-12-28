@@ -12,16 +12,28 @@ typedef enum {
     GLOBAL,
     LOCAL,
 } Scope;
+typedef enum {
+    SLOT_VAR,  // Object slot var
+    GLOBAL_VAR // Global var
+} VarType;
 
 typedef struct {
+    int index;    // Variable's index
+    VarType type; // Variable's type
+} VarLocation;
+
+typedef struct ScopeContext ScopeContext;
+struct ScopeContext {
     Vector *instructions;
     Vector *locals;
     Vector *args;
     int nlocals;
     int nargs;
+    ScopeContext *prev;
     Scope flag;
-} FuncContext;
-FuncContext *newFuncContext();
+};
+ScopeContext *newScopeContext(ScopeContext *);
+static int findLocalVar(ScopeContext *, char *);
 
 typedef struct ObjContext ObjContext;
 struct ObjContext {
@@ -35,9 +47,10 @@ ObjContext *newObjContext();
 
 typedef struct {
     Vector *pool;
-    FuncContext *funcContext;
+    ScopeContext *scopeContext;
     ObjContext *objContext;
 } CompileInfo;
+static int addConstantValue(Vector *, Value *);
 
 /* New six types of values */
 Value *newNullValue();
@@ -47,12 +60,9 @@ MethodValue *newMethodValue(int, int, int, Vector *);
 SlotValue *newSlotValue(int);
 ClassValue *newClassValue(Vector *);
 
-/* Program related operation */
-static Program *newProgram();
-static void freeProgram(Program *);
-
 /* Compile from Ast to Program */
 static void compileScope(CompileInfo *, ScopeStmt *);
+static void compileExpr(CompileInfo *, Exp *);
 
 Program *compile(ScopeStmt *stmt);
 
