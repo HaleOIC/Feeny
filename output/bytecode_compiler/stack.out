@@ -1,5 +1,20 @@
-Mode: Bytecode
-Input file: ../output/bytecode_compiler/stack.ast
-Loading ast from file...
-Compiling Program:
-defn stack (n) : (object : (var capacity = n var stackArray = array(n, 0) var size = 0 method push (v) : (if this.size.lt(this.capacity) : (this.stackArray.set(this.size, v) this.size = this.size.add(1)) else : (printf("Error: stack size is larger than capacity"))) method pop () : (if this.size.gt(0) : (this.size = this.size.sub(1) this.stackArray.get(this.size)) else : (printf("Error: stack is empty"))) method peek () : (if this.size.gt(0) : (this.stackArray.get(this.size.sub(1))) else : (printf("Error: stack is empty"))))) defn test () : (var s = stack(10) var i = 0 while i.lt(10) : (s.push(i.mul(10)) i = i.add(1)) while s.size.gt(0) : (printf("About to pop: ~\n", s.peek()) printf("Popped : ~\n", s.pop()))) test()
+About to pop: 90
+Popped : 90
+About to pop: 80
+Popped : 80
+About to pop: 70
+Popped : 70
+About to pop: 60
+Popped : 60
+About to pop: 50
+Popped : 50
+About to pop: 40
+Popped : 40
+About to pop: 30
+Popped : 30
+About to pop: 20
+Popped : 20
+About to pop: 10
+Popped : 10
+About to pop: 0
+Popped : 0

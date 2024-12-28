@@ -15,7 +15,7 @@ fi
 # Run output
 function test {
     ../bin/parser -i ../examples/$1.feeny -oast ../output/bytecode_compiler/$1.ast
-    ../bin/cfeeny -f -v ../output/bytecode_compiler/$1.ast > ../output/bytecode_compiler/$1.out
+    ../bin/cfeeny -f ../output/bytecode_compiler/$1.ast > ../output/bytecode_compiler/$1.out
 }
 test hello
 test hello2

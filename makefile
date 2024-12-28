@@ -62,7 +62,7 @@ clean_docker: stop
 
 # Rebuild everything from scratch
 .PHONY: rebuild_docker
-rebuild_docker: clean build_docker run_docker
+rebuild_docker: clean_docker build_docker run_docker
 
 .PHONY: compile
 compile: 

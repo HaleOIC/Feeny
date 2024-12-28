@@ -1,5 +1,4 @@
-Mode: Bytecode
-Input file: ../output/bytecode_compiler/inheritance.ast
-Loading ast from file...
-Compiling Program:
-defn base () : (object : (method do-op (x, y) : (printf("Do a binary operation on ~ and ~.\n", x, y) printf("Result = ~.\n", this.op(x, y))))) defn adder () : (object : (method op (x, y) : (x.add(y)))) defn multiplier () : (object : (method op (x, y) : (x.mul(y)))) var a = adder() var m = multiplier() a.do-op(11, 7) m.do-op(11, 7)
+Do a binary operation on 11 and 7.
+Result = 18.
+Do a binary operation on 11 and 7.
+Result = 77.
