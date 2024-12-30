@@ -56,6 +56,7 @@ typedef struct {
     int nargs;
     int nlocals;
     Vector *code;
+    int processed;
 } MethodValue;
 
 typedef struct {

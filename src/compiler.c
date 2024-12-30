@@ -65,6 +65,7 @@ MethodValue *newMethodValue(int name, int nargs, int nlocals, Vector *code) {
     rv->name = name;
     rv->nargs = nargs;
     rv->nlocals = nlocals;
+    rv->processed = 0;
     return rv;
 }
 

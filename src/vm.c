@@ -6,53 +6,105 @@
 
 // #define DEBUG 1
 
-static MethodValue *lookup_method(EnvObj *obj, char *method_name) {
-    if (!obj) {
+static void print_classes(Vector *classes) {
+    for (int i = 0; i < vector_size(classes); i++) {
+        TClass *template = (TClass *)vector_get(classes, i);
+        printf("Type: %ld, slotNames: ", template->type);
+        for (int j = 0; j < vector_size(template->varNames); j++) {
+            char *name = (char *)vector_get(template->varNames, j);
+            printf("%s ", name);
+        }
+        printf(" slotFunction: ");
+        for (int j = 0; j < vector_size(template->funcNameToPoolIndex->names); j++) {
+            char *name = (char *)vector_get(template->funcNameToPoolIndex->names, j);
+            printf("%s(%d) ", name, (int)(intptr_t)findByName(template->funcNameToPoolIndex, name));
+        }
+        printf("\n");
+    }
+}
+
+static MethodValue *lookup_method(Machine *machine, ObjType type, char *method_name) {
+
+    Vector *pool = machine->program->values;
+
+    // Find the name(string) constant's index
+    TClass *classTemplate = NULL;
+    for (int i = 0; i < vector_size(machine->classes); i++) {
+        TClass *curTemplate = (TClass *)vector_get(machine->classes, i);
+        if (curTemplate->type == type) {
+            classTemplate = curTemplate;
+            break;
+        }
+    }
+    if (!classTemplate) {
+        fprintf(stderr, "Error: Unknown type in classes set!\n");
+        exit(1);
+    }
+    void *result = findByName(classTemplate->funcNameToPoolIndex, method_name);
+    if (!result) {
         return NULL;
     }
 
-    MethodValue *rv = (MethodValue *)get_entry(obj, method_name);
-    if (rv != NULL) {
-        if (rv->tag != METHOD_VAL) {
-            fprintf(stderr, "Error: Given %s is not a method!\n", method_name);
-            exit(1);
-        }
-        return rv;
+    // Fetch the methodValue in the constant pool
+    Value *v = vector_get(pool, (int)(intptr_t)result);
+    if (v->tag != METHOD_VAL) {
+        fprintf(stderr, "Error: Given %s is not a method!\n", method_name);
+        exit(1);
     }
-    if (obj->parent && obj->parent->tag == ENV_OBJ) {
-        return lookup_method((EnvObj *)obj->parent, method_name);
+    return (MethodValue *)v;
+}
+
+static TClass *findClassByPoolIndex(Machine *machine, int index) {
+    for (int i = 0; i < vector_size(machine->classes); i++) {
+        TClass *templateClass = (TClass *)vector_get(machine->classes, i);
+        if (templateClass->poolIndex == index) {
+            return templateClass;
+        }
     }
     return NULL;
 }
 
+static int findSlotIndex(Machine *machine, ObjType type, char *name) {
+    TClass *targetClass = NULL;
+    if (type == GLOBAL_TYPE) {
+        targetClass = (TClass *)vector_get(machine->classes, 0);
+    } else {
+        targetClass = (TClass *)vector_get(machine->classes, type - OBJECT_TYPE + 1);
+    }
+    for (int i = 0; i < vector_size(targetClass->varNames); i++) {
+        if (strcmp(name, (char *)vector_get(targetClass->varNames, i)) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Core function: init a local frame, change machine's context
 static void make_frame(Machine *machine, MethodValue *method) {
     // Allocate memory for new frame
-    Frame *frame = (Frame *)malloc(sizeof(Frame));
+    int slots_num = method->nargs + method->nlocals;
+    Frame *frame = (Frame *)malloc(sizeof(Frame) + sizeof(intptr_t) * slots_num);
     if (!frame) {
         fprintf(stderr, "Memory allocation failed for new frame\n");
         exit(1);
     }
 
     // Initialize frame components
-    frame->labels = newMap();           // Create new label map for this frame
-    frame->locals = make_vector();      // Create vector for local variables
-    frame->codes = method->code;        // Point to method's code
-    frame->prev = machine->state->cur;  // Link to previous frame
-    frame->ra = machine->state->ip + 1; // Save current ip as return address
-
-    // Pre-allocate space for arguments and local variables
-    vector_set_length(frame->locals, method->nargs + method->nlocals, NULL);
-
-    // Save current machine state
-    int oldIp = machine->state->ip;
+    frame->parent = machine->cur; // Link to previous frame
+    frame->codes = method->code;
+    frame->ra = machine->ip + 1; // Save current ip as return address
+    for (int i = 0; i < slots_num; i++) {
+        frame->locals[i] = 0;
+    }
 
     // Temporarily set machine state to scan labels
-    machine->state->cur = frame;
-    machine->state->ip = 0;
+    // Reset ip to start of new frame's code
+    machine->cur = frame;
+    machine->ip = 0;
 
     // Scan through method's code to process all labels
+    Map *labels = newMap();
     for (int i = 0; i < vector_size(method->code); i++) {
-        machine->state->ip = i;
         ByteIns *instr = vector_get(method->code, i);
         if (instr->tag == LABEL_OP) {
             LabelIns *labelIns = (LabelIns *)instr;
@@ -64,67 +116,110 @@ static void make_frame(Machine *machine, MethodValue *method) {
                 fprintf(stderr, "Label instruction's name must be string\n");
                 exit(1);
             }
+            StringValue *labelName = (StringValue *)labelStr;
 
-            // Extract the actual label string and add to frame's label map
-            char *label = ((StringValue *)labelStr)->value;
-            addNewTuple(frame->labels, label, (void *)(intptr_t)i);
+            // Extract the actual label string index and add to frame's label map
+            // Tuple: string -> lineNumber
+            addNewTuple(labels, labelName->value, (void *)(intptr_t)i);
         }
     }
 
-    // Reset ip to start of new frame's code
-    machine->state->ip = 0;
-}
-
-static State *initState(Program *program) {
-    State *s = (State *)malloc(sizeof(State));
-    if (!s) {
-        fprintf(stderr, "Memory allocation failed for state\n");
-        exit(1);
+    // Process all branch and goto byte instructions from name idx to true address
+    if (method->processed == 1) {
+        return;
     }
-    s->cur = NULL;
-    s->stack = make_vector();
-    s->ip = 0;
-
-    // Attach global constants to virtual machine
-    s->global_variables = newMap();
-    for (int i = 0; i < vector_size(program->slots); i++) {
-        Value *global = vector_get(program->values, (intptr_t)vector_get(program->slots, i));
-        switch (global->tag) {
-        case SLOT_VAL:
-            SlotValue *slot = (SlotValue *)global;
-
-            Value *slotName = vector_get(program->values, slot->name);
-            if (slotName->tag != STRING_VAL) {
-                fprintf(stderr, "Global Slot value's name must be string!\n");
+    for (int i = 0; i < vector_size(method->code); i++) {
+        ByteIns *instr = vector_get(method->code, i);
+        switch (instr->tag) {
+        case BRANCH_OP:
+            BranchIns *branchInstr = (BranchIns *)instr;
+            Value *branchLabelStr = vector_get(machine->program->values, branchInstr->name);
+            if (branchLabelStr->tag != STRING_VAL) {
+                fprintf(stderr, "Label instruction's name must be string\n");
                 exit(1);
             }
-            addNewTuple(s->global_variables, ((StringValue *)slotName)->value, NULL);
+            StringValue *branchLabelName = (StringValue *)branchLabelStr;
+            branchInstr->name = (int)(intptr_t)findByName(labels, branchLabelName->value);
             break;
 
-        case METHOD_VAL:
-            MethodValue *method = (MethodValue *)global;
-            Value *methodName = vector_get(program->values, method->name);
-            if (methodName->tag != STRING_VAL) {
-                fprintf(stderr, "Global Method value's name must be string!\n");
+        case GOTO_OP:
+            GotoIns *gotoInstr = (GotoIns *)instr;
+            Value *gotoLabelStr = vector_get(machine->program->values, gotoInstr->name);
+            if (gotoLabelStr->tag != STRING_VAL) {
+                fprintf(stderr, "Label instruction's name must be string\n");
                 exit(1);
             }
-            addNewTuple(s->global_variables, ((StringValue *)methodName)->value, method);
+            StringValue *gotoLabelName = (StringValue *)gotoLabelStr;
+            gotoInstr->name = (int)(intptr_t)findByName(labels, gotoLabelName->value);
             break;
         default:
-            fprintf(stderr, "Unknown global values!\n");
             break;
         }
     }
-    return s;
+    method->processed = 1;
+}
+
+static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
+    for (int i = 0; i < vector_size(slots); i++) {
+        Value *v = (Value *)(vector_get(pool, (int)(intptr_t)vector_get(slots, i)));
+        switch (v->tag) {
+        case SLOT_VAL:
+            SlotValue *slotValue = (SlotValue *)v;
+            StringValue *slotName = (StringValue *)vector_get(pool, slotValue->name);
+            if (slotName->tag != STRING_VAL) {
+                fprintf(stderr, "Error: Class's slot name must be string!\n");
+                exit(1);
+            }
+            vector_add(template->varNames, slotName->value);
+            break;
+        case METHOD_VAL:
+            MethodValue *methodValue = (MethodValue *)v;
+            StringValue *methodName = (StringValue *)vector_get(pool, methodValue->name);
+            if (methodName->tag != STRING_VAL) {
+                fprintf(stderr, "Error: Class's func name must be string!\n");
+                exit(1);
+            }
+            addNewTuple(template->funcNameToPoolIndex, methodName->value, (void *)(intptr_t)vector_get(slots, i));
+            break;
+        default:
+            fprintf(stderr, "Error: Unknown class value's slot type!\n");
+            exit(1);
+            break;
+        }
+    }
 }
 
 void initvm(Program *program, Machine *machine) {
     machine->program = program;
-    machine->state = initState(program);
+    machine->stack = make_vector();
+    machine->cur = NULL;
+    machine->classes = make_vector();
+    machine->ip = 0;
+
+    // Attach all related classes info to virtual machine
+    // Global can be seen as a special class and Object
+    TClass *globalTemplate = newTemplateClass(GLOBAL_TYPE, -1);
+    addSlotInfo(machine->program->values, globalTemplate, machine->program->slots);
+    machine->global = newClassObj(GLOBAL_TYPE, vector_size(globalTemplate->varNames));
+    vector_add(machine->classes, globalTemplate);
+
+    for (int i = 0; i < vector_size(program->values); i++) {
+        Value *value = (Value *)vector_get(program->values, i);
+        if (value->tag == CLASS_VAL) {
+            ClassValue *classValue = (ClassValue *)value;
+            TClass *newTemplate = newTemplateClass(OBJECT_TYPE + vector_size(machine->classes) - 1, i);
+            addSlotInfo(machine->program->values, newTemplate, classValue->slots);
+            vector_add(machine->classes, newTemplate);
+        }
+    }
+#ifdef DEBUG
+    print_classes(machine->classes);
+#endif
+    // Init local frame
     MethodValue *method = vector_get(program->values, program->entry);
     make_frame(machine, method);
-    machine->state->cur->ra = -1;
-    machine->state->cur->prev = NULL;
+    machine->cur->ra = -1;
+    machine->cur->parent = NULL;
 }
 
 static void handle_lit_instr(Machine *machine, LitIns *ins) {
@@ -132,10 +227,10 @@ static void handle_lit_instr(Machine *machine, LitIns *ins) {
     switch (value->tag) {
     case INT_VAL:
         IntValue *int_value = (IntValue *)value;
-        vector_add(machine->state->stack, make_int_obj(int_value->value));
+        vector_add(machine->stack, newIntObj(int_value->value));
         break;
     case NULL_VAL:
-        vector_add(machine->state->stack, make_null_obj());
+        vector_add(machine->stack, newNullObj());
         break;
     default:
         fprintf(stderr, "Only int or null object can be used in lit\n");
@@ -152,10 +247,10 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     }
 
     // Get arguments from stack
-    Obj **args = malloc(sizeof(Value *) * ins->arity);
+    RTObj **args = malloc(sizeof(RTObj *) * ins->arity);
     for (int i = ins->arity - 1; i >= 0; i--) {
-        args[i] = vector_pop(machine->state->stack);
-        if (args[i]->tag != INT_OBJ) {
+        args[i] = vector_pop(machine->stack);
+        if (((Value *)args[i])->tag != INT_TYPE) {
             printf("Error: printf only accepts integers\n");
             exit(1);
         }
@@ -164,8 +259,8 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     int idx = 0;
     while (*str_format != '\0') {
         if (*str_format == '~') {
-            Obj *value = args[idx++];
-            printf("%d", ((IntObj *)value)->value);
+            intptr_t value = (intptr_t)args[idx++];
+            printf("%ld", ((RInt *)value)->value);
         } else {
             putchar(*str_format);
         }
@@ -174,20 +269,20 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
 
     // Cleanup and push null as return value
     free(args);
-    vector_add(machine->state->stack, make_null_obj());
+    vector_add(machine->stack, newNullObj());
 }
 
 static void handle_array_instr(Machine *machine) {
-    Obj *init_val = vector_pop(machine->state->stack);
-    Obj *length_val = vector_pop(machine->state->stack);
+    RTObj *init_val = vector_pop(machine->stack);
+    RTObj *length_val = vector_pop(machine->stack);
 
-    if (length_val->tag != INT_OBJ) {
+    if (length_val->type != INT_TYPE) {
         fprintf(stderr, "Array length must be integer\n");
         exit(1);
     }
 
-    ArrayObj *array = make_array_obj((IntObj *)length_val, init_val);
-    vector_add(machine->state->stack, (Obj *)array);
+    RArray *array = newArrayObj((int)((RInt *)length_val)->value, init_val);
+    vector_add(machine->stack, array);
 }
 
 static void handle_object_instr(Machine *machine, ObjectIns *ins) {
@@ -196,143 +291,144 @@ static void handle_object_instr(Machine *machine, ObjectIns *ins) {
         fprintf(stderr, "Object instruction requires class value\n");
         exit(1);
     }
-
-    // Distinguish n variables slots, m method slots
-    int nslots = 0;
-    int mslots = 0;
-    Vector *names = make_vector();
-    Vector *values = make_vector();
-    Vector *ids = make_vector();
-    for (int i = 0; i < vector_size(class->slots); i++) {
-        Value *v = (Value *)vector_get(machine->program->values, (intptr_t)vector_get(class->slots, i));
-        switch (v->tag) {
-        case METHOD_VAL:
-            mslots++;
-            MethodValue *method = (MethodValue *)v;
-            char *methodName = ((StringValue *)vector_get(machine->program->values, method->name))->value;
-            vector_add(names, methodName);
-            vector_add(values, method);
-            break;
-        case SLOT_VAL:
-            nslots++;
-            SlotValue *slot = (SlotValue *)v;
-            char *varName = ((StringValue *)vector_get(machine->program->values, slot->name))->value;
-            vector_add(names, varName);
-            vector_add(values, NULL);
-            vector_add(ids, (void *)(intptr_t)i);
-            break;
-        default:
-            fprintf(stderr, "Error: Object instruction's slots should be Slot or method!\n");
-            exit(1);
-            break;
-        }
+    TClass *classTemplate = findClassByPoolIndex(machine, ins->class);
+    if (!classTemplate) {
+        fprintf(stderr, "Error: unknown object type\n");
+        exit(1);
     }
 
-    // Pop initial values
-    for (int i = nslots - 1; i >= 0; i--) {
-        Obj *obj = vector_pop(machine->state->stack);
-        vector_set(values, (intptr_t)vector_get(ids, i), obj);
+    int slotNum = (int)(intptr_t)vector_size(classTemplate->varNames);
+    RClass *instance = newClassObj(classTemplate->type, slotNum);
+
+    // Pop initial values and parent
+    for (int i = slotNum - 1; i >= 0; i--) {
+        instance->var_slots[i] = (intptr_t)vector_pop(machine->stack);
     }
-
-    Obj *parent = vector_pop(machine->state->stack);
-    EnvObj *obj = make_env_obj(parent);
-
-    free(obj->names);
-    free(obj->entries);
-    free(ids);
-    obj->names = names;
-    obj->entries = values;
-
-    vector_add(machine->state->stack, (Obj *)obj);
+    instance->parent = (intptr_t)vector_pop(machine->stack);
+    // #ifdef DEBUG
+    //     if (instance->parent != 0) {
+    //         RClass *parentInstance = (RClass *)instance->parent;
+    //         printf("Parent's type: %ld\n", parentInstance->type);
+    //     }
+    // #endif
+    vector_add(machine->stack, instance);
 }
 
 static void handle_slot_instr(Machine *machine, SlotIns *ins) {
-    Obj *receiver = vector_pop(machine->state->stack);
-    if (receiver->tag != ENV_OBJ) {
-        fprintf(stderr, "Get slot requires object\n");
+    RTObj *receiver = vector_pop(machine->stack);
+    if (receiver->type < OBJECT_TYPE) {
+        fprintf(stderr, "Error: Get slot requires object\n");
         exit(1);
     }
-    char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    Obj *obj = (Obj *)get_entry((EnvObj *)receiver, slotName);
-    if (!obj) {
+    char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
+    RClass *instance = (RClass *)receiver;
+    int slotIndex = findSlotIndex(machine, instance->type, slotName);
+    if (slotIndex < 0) {
         fprintf(stderr, "Invalid slot access\n");
         exit(1);
     }
 
-    vector_add(machine->state->stack, obj);
+    vector_add(machine->stack, (void *)instance->var_slots[slotIndex]);
 }
 
 static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
-    Obj *value = vector_pop(machine->state->stack);
-    Obj *receiver = vector_pop(machine->state->stack);
+    intptr_t value = (intptr_t)vector_pop(machine->stack);
 
-    if (receiver->tag != ENV_OBJ) {
-        fprintf(stderr, "Set slot requires object\n");
+    RTObj *receiver = vector_pop(machine->stack);
+    if (receiver->type < OBJECT_TYPE) {
+        fprintf(stderr, "Error: Set slot requires object\n");
         exit(1);
     }
+
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
+    RClass *instance = (RClass *)receiver;
+    int slotIndex = findSlotIndex(machine, instance->type, slotName);
+    if (slotIndex < 0) {
+        fprintf(stderr, "Invalid slot access\n");
+        exit(1);
+    }
 
-    add_entry((EnvObj *)receiver, slotName, (Entry *)value);
-
-    vector_add(machine->state->stack, value);
+    instance->var_slots[slotIndex] = value;
+    vector_add(machine->stack, (void *)value);
 }
 
 static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
     Vector *args = make_vector();
     for (int i = 0; i < ins->arity - 1; i++) {
-        vector_add(args, vector_pop(machine->state->stack));
+        vector_add(args, vector_pop(machine->stack));
     }
 
-    Obj *receiver = vector_pop(machine->state->stack);
+    RTObj *receiver = vector_pop(machine->stack);
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    if (receiver->tag == INT_OBJ) {
+    if (receiver->type == INT_TYPE) {
         // Handle integer operations
+        RInt *operand1 = (RInt *)receiver;
         if (ins->arity != 2) {
             fprintf(stderr, "Error: Int Object slot invoke must take another argument\n");
             exit(1);
         }
 
-        Obj *other = vector_get(args, 0);
-        if (other->tag != INT_OBJ) {
+        RTObj *other = vector_get(args, 0);
+        if (other->type != INT_TYPE) {
             fprintf(stderr, "Error: Type check error on Int Object invoke\n");
             exit(1);
         }
 
-        IntObj *operand = (IntObj *)other;
-        Obj *result = NULL;
+        RInt *operand2 = (RInt *)other;
+        RTObj *result = NULL;
 
         // Handle different integer operations
         if (strcmp(slotName, "add") == 0) {
-            result = (Obj *)add((IntObj *)receiver, operand);
+            result = (RTObj *)newIntObj(operand1->value + operand2->value);
         } else if (strcmp(slotName, "sub") == 0) {
-            result = (Obj *)sub((IntObj *)receiver, operand);
+            result = (RTObj *)newIntObj(operand1->value - operand2->value);
         } else if (strcmp(slotName, "mul") == 0) {
-            result = (Obj *)mul((IntObj *)receiver, operand);
+            result = (RTObj *)newIntObj(operand1->value * operand2->value);
         } else if (strcmp(slotName, "div") == 0) {
-            result = (Obj *)divi((IntObj *)receiver, operand);
+            result = (RTObj *)newIntObj(operand1->value / operand2->value);
         } else if (strcmp(slotName, "mod") == 0) {
-            result = (Obj *)mod((IntObj *)receiver, operand);
+            result = (RTObj *)newIntObj(operand1->value % operand2->value);
         } else if (strcmp(slotName, "lt") == 0) {
-            result = lt((IntObj *)receiver, operand);
+            if (operand1->value < operand2->value) {
+                result = (RTObj *)newIntObj(0);
+            } else {
+                result = (RTObj *)newNullObj();
+            }
         } else if (strcmp(slotName, "gt") == 0) {
-            result = gt((IntObj *)receiver, operand);
+            if (operand1->value > operand2->value) {
+                result = (RTObj *)newIntObj(0);
+            } else {
+                result = (RTObj *)newNullObj();
+            }
         } else if (strcmp(slotName, "le") == 0) {
-            result = le((IntObj *)receiver, operand);
+            if (operand1->value <= operand2->value) {
+                result = (RTObj *)newIntObj(0);
+            } else {
+                result = (RTObj *)newNullObj();
+            }
         } else if (strcmp(slotName, "ge") == 0) {
-            result = ge((IntObj *)receiver, operand);
+            if (operand1->value >= operand2->value) {
+                result = (RTObj *)newIntObj(0);
+            } else {
+                result = (RTObj *)newNullObj();
+            }
         } else if (strcmp(slotName, "eq") == 0) {
-            result = eq((IntObj *)receiver, operand);
+            if (operand1->value == operand2->value) {
+                result = (RTObj *)newIntObj(0);
+            } else {
+                result = (RTObj *)newNullObj();
+            }
         } else {
             fprintf(stderr, "Error: Unsupported Int Object operation: %s\n", slotName);
             exit(1);
         }
 
-        vector_add(machine->state->stack, (Obj *)result);
-        machine->state->ip++;
-    } else if (receiver->tag == ARRAY_OBJ) {
-        ArrayObj *arr = (ArrayObj *)receiver;
+        vector_add(machine->stack, result);
+        machine->ip++;
+    } else if (receiver->type == ARRAY_TYPE) {
+        RArray *arr = (RArray *)receiver;
 
         if (strcmp(slotName, "set") == 0) {
             if (ins->arity != 3) {
@@ -340,64 +436,77 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
                 exit(1);
             }
 
-            Obj *index = vector_get(args, 1);
-            Obj *value = vector_get(args, 0);
-
-            if (index->tag != INT_OBJ) {
+            RTObj *index = vector_get(args, 1);
+            RTObj *value = vector_get(args, 0);
+            if (index->type != INT_TYPE) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
             }
 
-            Obj *result = (Obj *)array_set(arr, (IntObj *)index, value);
-            vector_add(machine->state->stack, result);
+            int arrayIndex = (int)((RInt *)index)->value;
+            arr->slots[arrayIndex] = (intptr_t)value;
 
+            vector_add(machine->stack, newNullObj());
         } else if (strcmp(slotName, "get") == 0) {
             if (ins->arity != 2) {
                 fprintf(stderr, "Error: Array Object get operation must take one argument\n");
                 exit(1);
             }
 
-            Obj *index = vector_get(args, 0);
-            if (index->tag != INT_OBJ) {
+            RTObj *index = vector_get(args, 0);
+            if (index->type != INT_TYPE) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
             }
 
-            Obj *result = array_get(arr, (IntObj *)index);
-            vector_add(machine->state->stack, result);
-
+            int arrayIndex = (int)((RInt *)index)->value;
+            vector_add(machine->stack, (void *)arr->slots[arrayIndex]);
         } else if (strcmp(slotName, "length") == 0) {
             if (ins->arity != 1) {
                 fprintf(stderr, "Error: Array Object length operation takes no arguments\n");
                 exit(1);
             }
 
-            Obj *result = (Obj *)array_length(arr);
-            vector_add(machine->state->stack, result);
-
+            RInt *result = newIntObj(arr->length);
+            vector_add(machine->stack, result);
         } else {
             fprintf(stderr, "Error: Unsupported Array Object operation: %s\n", slotName);
             exit(1);
         }
-        machine->state->ip++;
-    } else if (receiver->tag == ENV_OBJ) {
-        MethodValue *method = (MethodValue *)lookup_method((EnvObj *)receiver, slotName);
+        machine->ip++;
+    } else if (receiver->type >= OBJECT_TYPE) {
+
+        RTObj *current = receiver;
+        MethodValue *method = NULL;
+
+        while (current) {
+#ifdef DEBUG
+            if (current != 0) {
+                printf("Searched type: %ld\n", (RTObj *)current->type);
+            }
+#endif
+            method = lookup_method(machine, current->type, slotName);
+            if (method) {
+                break;
+            }
+            current = (RTObj *)((RClass *)current)->parent;
+        }
         if (!method || method->tag != METHOD_VAL) {
-            fprintf(stderr, "Undefined function: %s\n", slotName);
+            fprintf(stderr, "Error: Undefined function: %s\n", slotName);
             exit(1);
         }
 
         if (ins->arity != method->nargs) {
-            fprintf(stderr, "Wrong number of arguments for function %s\n", slotName);
+            fprintf(stderr, "Error: Wrong number of arguments for function %s\n", slotName);
             exit(1);
         }
 
         // Create new frame with receiver as parent
         make_frame(machine, method);
+        machine->cur->locals[0] = (intptr_t)receiver;
 
-        vector_set(machine->state->cur->locals, 0, receiver);
         for (int i = 0; i < ins->arity - 1; i++) {
-            vector_set(machine->state->cur->locals, ins->arity - i - 1, vector_get(args, i));
+            machine->cur->locals[ins->arity - i - 1] = (intptr_t)vector_get(args, i);
         }
     } else {
         fprintf(stderr, "Error: Cannot invoke any operation on Null Object\n");
@@ -409,134 +518,103 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
 static void handle_call_instr(Machine *machine, CallIns *ins) {
     StringValue *funcName = vector_get(machine->program->values, ins->name);
     if (funcName->tag != STRING_VAL) {
-        fprintf(stderr, "Function name must be string\n");
+        fprintf(stderr, "Error: Function name must be string\n");
         exit(1);
     }
 
-    MethodValue *method = findByName(machine->state->global_variables, funcName->value);
+    MethodValue *method = lookup_method(machine, GLOBAL_TYPE, funcName->value);
     if (!method || method->tag != METHOD_VAL) {
-        fprintf(stderr, "Undefined function: %s\n", funcName->value);
+        fprintf(stderr, "Error: Undefined function: %s\n", funcName->value);
         exit(1);
     }
-
     if (ins->arity != method->nargs) {
         fprintf(stderr, "Wrong number of arguments for function %s\n", funcName->value);
         exit(1);
     }
 
     make_frame(machine, method);
-
     for (int i = 0; i < ins->arity; i++) {
-        vector_set(machine->state->cur->locals, ins->arity - 1 - i, vector_pop(machine->state->stack));
+        machine->cur->locals[ins->arity - i - 1] = (intptr_t)vector_pop(machine->stack);
     }
 }
 static void handle_get_local_instr(Machine *machine, GetLocalIns *ins) {
-    Frame *cur = machine->state->cur;
-    vector_add(machine->state->stack, (Obj *)vector_get(cur->locals, ins->idx));
+    vector_add(machine->stack, (void *)machine->cur->locals[ins->idx]);
 }
 
 static void handle_set_local_instr(Machine *machine, SetLocalIns *ins) {
-    Frame *cur = machine->state->cur;
-    Obj *top = vector_peek(machine->state->stack);
-    vector_set(cur->locals, ins->idx, top);
+    machine->cur->locals[ins->idx] = (intptr_t)vector_peek(machine->stack);
 }
 
 static void handle_get_global_instr(Machine *machine, GetGlobalIns *ins) {
     StringValue *global = (StringValue *)vector_get(machine->program->values, ins->name);
     if (global->tag != STRING_VAL) {
-        fprintf(stderr, "Global variable should be string value!\n");
+        fprintf(stderr, "Error: Global variable should be string value!\n");
         exit(1);
     }
-    Obj *target = findByName(machine->state->global_variables, global->value);
-    vector_add(machine->state->stack, target);
+
+    int slotIndex = findSlotIndex(machine, GLOBAL_TYPE, global->value);
+    vector_add(machine->stack, (void *)machine->global->var_slots[slotIndex]);
 }
 
 static void handle_set_global_instr(Machine *machine, SetGlobalIns *ins) {
     StringValue *global = (StringValue *)vector_get(machine->program->values, ins->name);
     if (global->tag != STRING_VAL) {
-        fprintf(stderr, "Global variable should be string value!\n");
+        fprintf(stderr, "Error: Global variable should be string value!\n");
         exit(1);
     }
-    Obj *top = vector_peek(machine->state->stack);
-    addNewTuple(machine->state->global_variables, global->value, top);
+    int slotIndex = findSlotIndex(machine, GLOBAL_TYPE, global->value);
+    RTObj *top = vector_peek(machine->stack);
+    machine->global->var_slots[slotIndex] = (intptr_t)top;
 }
 
 static void handle_goto_instr(Machine *machine, GotoIns *ins) {
-
-    StringValue *labelName = vector_get(machine->program->values, ins->name);
-    if (labelName->tag != STRING_VAL) {
-        fprintf(stderr, "Label name must be string\n");
-        exit(1);
-    }
-
-    void *target = findByName(machine->state->cur->labels, labelName->value);
-    if (!target) {
-        fprintf(stderr, "Label not found: %s\n", labelName->value);
-        exit(1);
-    }
-
-    machine->state->ip = (int)(intptr_t)target;
+    machine->ip = (int)(intptr_t)ins->name;
 }
 
 static void handle_branch_instr(Machine *machine, BranchIns *ins) {
-    Obj *condition = vector_pop(machine->state->stack);
+    RTObj *condition = vector_pop(machine->stack);
 
-    if (condition->tag != NULL_OBJ) {
-        StringValue *labelName = vector_get(machine->program->values, ins->name);
-        if (labelName->tag != STRING_VAL) {
-            fprintf(stderr, "Label name must be string\n");
-            exit(1);
-        }
-
-        void *target = findByName(machine->state->cur->labels, labelName->value);
-        if (!target) {
-            fprintf(stderr, "Label not found: %s\n", labelName->value);
-            exit(1);
-        }
-
-        machine->state->ip = (int)(intptr_t)target;
+    if (condition->type != NULL_TYPE) {
+        machine->ip = (int)(intptr_t)ins->name;
     } else {
-        machine->state->ip++;
+        machine->ip++;
     }
 }
 
 static void handle_return_instr(Machine *machine) {
-    Frame *cur = machine->state->cur;
-
-    machine->state->cur = cur->prev;
-    machine->state->ip = cur->ra;
-
-    vector_free(cur->labels->names);
-    vector_free(cur->labels->values);
-    free(cur->labels);
-    vector_free(cur->locals);
-    free(cur);
+    Frame *cur = machine->cur;
+    machine->cur = cur->parent;
+    machine->ip = cur->ra;
+    // vector_free(cur->labels->names);
+    // vector_free(cur->labels->values);
+    // free(cur->labels);
+    // vector_free(cur->locals);
+    // free(cur);
 }
 
 static void handle_drop_instr(Machine *machine) {
-    vector_pop(machine->state->stack);
+    vector_pop(machine->stack);
 }
 
 void runvm(Machine *machine) {
-    State *state = machine->state;
     Program *program = machine->program;
 
     while (1) {
 
 #ifdef DEBUG
-        printf("cur ip: %d\n", state->ip);
+        printf("cur ip: %ld\n", machine->ip);
 #endif
 
         // When encounter the end of current frame, break the loop
-        if (state->ip == -1 && state->cur == NULL) {
+        if (machine->ip == -1 && machine->cur == NULL) {
             break;
         }
-        if (state->ip >= vector_size(state->cur->codes)) {
+        if (machine->ip >= vector_size(machine->cur->codes)) {
             fprintf(stderr, "Error: execute bytecodes out of bound!\n");
             exit(1);
         }
 
-        ByteIns *instr = (ByteIns *)vector_get(state->cur->codes, state->ip);
+        ByteIns *instr = (ByteIns *)vector_get(machine->cur->codes, machine->ip);
 
 #ifdef DEBUG
         print_ins(instr);
@@ -603,6 +681,6 @@ void runvm(Machine *machine) {
             fprintf(stderr, "Unknown instruction: %d\n", instr->tag);
             exit(1);
         }
-        state->ip++;
+        machine->ip++;
     }
 }

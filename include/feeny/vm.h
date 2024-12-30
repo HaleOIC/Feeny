@@ -1,31 +1,25 @@
 #ifndef VM_H
 #define VM_H
 #include "bytecode.h"
-#include "interpreter.h"
+#include "runtimeObj.h"
 #include "utils.h"
 
 typedef struct Frame Frame;
 struct Frame {
-    Map *labels;
-    Vector *locals;
+    Frame *parent;
+    intptr_t ra; // Return address
     Vector *codes;
-    Frame *prev;
-    int ra; // Return address
+    intptr_t locals[];
 };
 static Frame *newFrame(MethodValue *);
 
 typedef struct {
-    Map *global_variables;
-    Frame *cur; // Current code frame
-    Vector *stack;
-    int ip; // Instruction pointer
-} State;
-
-static State *initState(Program *);
-
-typedef struct {
     Program *program;
-    State *state;
+    Vector *stack;
+    RClass *global;
+    Vector *classes; // All template Classes
+    Frame *cur;      // Current code frame
+    intptr_t ip;     // Instruction pointer
 } Machine;
 
 /* Link source program to vm */
@@ -33,7 +27,7 @@ void initvm(Program *, Machine *);
 /* Run vm to execute source program */
 void runvm(Machine *);
 /* Handle all kinds of instructions */
-static MethodValue *lookup_method(EnvObj *obj, char *method_name);
+static MethodValue *lookup_method(Machine *, ObjType, char *);
 static void handle_lit_instr(Machine *, LitIns *);
 static void handle_label_instr(Machine *, LabelIns *);
 static void handle_print_instr(Machine *, PrintfIns *);
