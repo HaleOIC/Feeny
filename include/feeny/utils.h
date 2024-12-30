@@ -39,6 +39,7 @@ typedef struct {
     Vector *values;
 } Map;
 Map *newMap();
+void freeMap(Map *);
 void *findByName(Map *, char *);
 void addNewTuple(Map *, char *, void *);
 

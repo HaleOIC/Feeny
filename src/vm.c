@@ -156,6 +156,7 @@ static void make_frame(Machine *machine, MethodValue *method) {
             break;
         }
     }
+    freeMap(labels);
     method->processed = 1;
 }
 
@@ -305,12 +306,6 @@ static void handle_object_instr(Machine *machine, ObjectIns *ins) {
         instance->var_slots[i] = (intptr_t)vector_pop(machine->stack);
     }
     instance->parent = (intptr_t)vector_pop(machine->stack);
-    // #ifdef DEBUG
-    //     if (instance->parent != 0) {
-    //         RClass *parentInstance = (RClass *)instance->parent;
-    //         printf("Parent's type: %ld\n", parentInstance->type);
-    //     }
-    // #endif
     vector_add(machine->stack, instance);
 }
 
@@ -512,7 +507,7 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         fprintf(stderr, "Error: Cannot invoke any operation on Null Object\n");
         exit(1);
     }
-    free(args);
+    vector_free(args);
 }
 
 static void handle_call_instr(Machine *machine, CallIns *ins) {
@@ -585,11 +580,7 @@ static void handle_return_instr(Machine *machine) {
     Frame *cur = machine->cur;
     machine->cur = cur->parent;
     machine->ip = cur->ra;
-    // vector_free(cur->labels->names);
-    // vector_free(cur->labels->values);
-    // free(cur->labels);
-    // vector_free(cur->locals);
-    // free(cur);
+    free(cur);
 }
 
 static void handle_drop_instr(Machine *machine) {

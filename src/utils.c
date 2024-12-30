@@ -139,6 +139,12 @@ Map *newMap() {
     return new;
 }
 
+void freeMap(Map *mp) {
+    vector_free(mp->names);
+    vector_free(mp->values);
+    free(mp);
+}
+
 void *findByName(Map *map, char *name) {
     int pos = -1;
     for (int i = 0; i < vector_size(map->names); i++) {
