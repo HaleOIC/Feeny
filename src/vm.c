@@ -275,7 +275,7 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     }
 
     // Cleanup and push null as return value
-    vector_add(machine->stack, newNullObj());
+    // vector_add(machine->stack, newNullObj());
 }
 
 static void handle_array_instr(Machine *machine) {
@@ -286,7 +286,7 @@ static void handle_array_instr(Machine *machine) {
         fprintf(stderr, "Array length must be integer\n");
         exit(1);
     }
-
+    vector_add(machine->stack, init_val);
     RArray *array = newArrayObj((int)((RInt *)length_val)->value, init_val);
     vector_add(machine->stack, array);
 }

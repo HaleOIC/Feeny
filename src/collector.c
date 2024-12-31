@@ -8,19 +8,23 @@ intptr_t to_space = 0;
 intptr_t to_ptr = 0;
 size_t total_bytes = 0;
 
+// 200 -> 1.45
+// 180 -> 1.27
+// 90 -> 0.661
+// 1 -> 0.034
 // Helper function: check if an address is forward pointer
-static int is_forward(intptr_t address) {
+int is_forward(intptr_t address) {
     return ((RTObj *)address)->type == BROKEN_HEART;
 }
 
 // Helper function: set forward address for an object
-static void set_forward_address(intptr_t obj, intptr_t newAddress) {
+void set_forward_address(intptr_t obj, intptr_t newAddress) {
     ((RTObj *)obj)->type = BROKEN_HEART;
     *((intptr_t *)obj + 1) = (intptr_t)newAddress;
 }
 
 // Helper function: get forward address of an object
-static intptr_t get_forward_address(intptr_t obj) {
+intptr_t get_forward_address(intptr_t obj) {
     if (!is_forward(obj)) {
         fprintf(stderr, "Error: Attempting to get forward address of non-forwarded object\n");
         exit(1);
@@ -65,71 +69,6 @@ static size_t get_object_size(intptr_t obj) {
         }
         return sizeof(RClass) + vector_size(template->varNames) * sizeof(intptr_t);
     }
-}
-
-void print_heap_objects() {
-    printf("\n=== Heap Objects (from-space) ===\n");
-    printf("heap_start: %p\n", (void *)heap_start);
-    printf("heap_ptr: %p\n", (void *)heap_ptr);
-
-    intptr_t current = heap_start;
-    int obj_count = 0;
-
-    while (current < heap_ptr) {
-        RTObj *obj = (RTObj *)current;
-        size_t size = get_object_size(current);
-
-        printf("\nObject #%d at %p (size: %zu bytes):\n", ++obj_count, (void *)current, size);
-        printf("  Type: ");
-
-        switch (obj->type) {
-        case INT_TYPE:
-            printf("INT_TYPE (%ld)\n", ((RInt *)obj)->value);
-            break;
-
-        case NULL_TYPE:
-            printf("NULL_TYPE\n");
-            break;
-
-        case ARRAY_TYPE: {
-            RArray *arr = (RArray *)obj;
-            printf("ARRAY_TYPE (length: %zu)\n", arr->length);
-            printf("  Elements:\n");
-            for (size_t i = 0; i < arr->length; i++) {
-                printf("    [%zu]: %p\n", i, (void *)arr->slots[i]);
-            }
-            break;
-        }
-
-        case BROKEN_HEART:
-            printf("BROKEN_HEART (forward to: %p)\n",
-                   (void *)get_forward_address(current));
-            break;
-
-        default: {
-            TClass *template = find_class_by_type(obj->type);
-            if (template) {
-                printf("CLASS_TYPE (%ld)\n", obj->type);
-                RClass *cls = (RClass *)obj;
-                printf("  Parent: %p\n", (void *)cls->parent);
-                printf("  Variables:\n");
-                for (int i = 0; i < vector_size(template->varNames); i++) {
-                    char *varName = (char *)vector_get(template->varNames, i);
-                    printf("    %s: %p\n", varName, (void *)cls->var_slots[i]);
-                }
-            } else {
-                printf("UNKNOWN_TYPE (%ld)\n", obj->type);
-            }
-            break;
-        }
-        }
-
-        current += size;
-    }
-
-    printf("\nTotal objects: %d\n", obj_count);
-    printf("Total heap usage: %ld bytes\n", heap_ptr - heap_start);
-    printf("=== End of Heap Objects ===\n\n");
 }
 
 // Copy object to to-space
@@ -256,6 +195,8 @@ int garbage_collector() {
     // Reset to-space pointer
     to_ptr = to_space;
 
+    memset((void *)to_space, 0, heap_ptr - heap_start);
+
     // Copy root set
     scan_root_set();
 
@@ -275,50 +216,23 @@ int garbage_collector() {
     return 1; // Collection successful
 }
 
-// static size_t alloc_count = 0;
-
-// void *halloc(int nbytes) {
-//     alloc_count++;
-
-//     // Align to 8 bytes
-//     int original_size = nbytes;
-//     nbytes = (nbytes + 7) & ~7;
-
-//     printf("=== Allocation #%zu ===\n", alloc_count);
-//     printf("Requested size: %d bytes\n", original_size);
-//     printf("Aligned size: %d bytes\n", nbytes);
-//     printf("Before GC - heap_ptr: %p\n", (void *)heap_ptr);
-
-//     garbage_collector();
-
-//     total_bytes += nbytes;
-//     void *result = (void *)heap_ptr;
-//     heap_ptr += nbytes;
-
-//     printf("Allocated at: %p\n", result);
-//     printf("New heap_ptr: %p\n", (void *)heap_ptr);
-//     printf("Remaining heap space: %ld bytes\n", (heap_start + HEAP_SIZE) - heap_ptr);
-//     printf("==================\n\n");
-
-//     return result;
-// }
 void *halloc(int nbytes) {
     // Align to 8 bytes
     nbytes = (nbytes + 7) & ~7;
 
     // Check if enough space in from-space
-    garbage_collector();
-    // if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
-    //     // If not enough space, run garbage collector
-    //     if (!garbage_collector()) {
-    //         fprintf(stderr, "Error: Out of memory\n");
-    //         exit(1);
-    //     }
-    //     if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
-    //         fprintf(stderr, "Error: Out of memory after GC\n");
-    //         exit(1);
-    //     }
-    // }
+    if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
+        // If not enough space, run garbage collector
+        if (!garbage_collector()) {
+            fprintf(stderr, "Error: Out of memory\n");
+            exit(1);
+        }
+        if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
+            print_heap_objects();
+            fprintf(stderr, "Error: Out of memory after GC\n");
+            exit(1);
+        }
+    }
 
     total_bytes += nbytes;
     void *result = (void *)heap_ptr;
@@ -349,4 +263,80 @@ void print_detailed_memory() {
 
     printf("Total bytes allocated: %zu\n", total_bytes);
     printf("========================\n");
+}
+
+void print_heap_objects() {
+    printf("\n=== Heap Objects (from-space) ===\n");
+    printf("heap_start: %p\n", (void *)heap_start);
+    printf("heap_ptr: %p\n", (void *)heap_ptr);
+
+    intptr_t current = heap_start;
+    int obj_count = 0;
+
+    // while (current < heap_ptr) {
+    //     RTObj *obj = (RTObj *)current;
+    //     size_t size = get_object_size(current);
+
+    //     printf("\nObject #%d at %p (size: %zu bytes):\n", ++obj_count, (void *)current, size);
+    //     printf("  Type: ");
+
+    //     switch (obj->type) {
+    //     case INT_TYPE:
+    //         printf("INT_TYPE (%ld)\n", ((RInt *)obj)->value);
+    //         break;
+
+    //     case NULL_TYPE:
+    //         printf("NULL_TYPE\n");
+    //         break;
+
+    //     case ARRAY_TYPE: {
+    //         RArray *arr = (RArray *)obj;
+    //         printf("ARRAY_TYPE (length: %zu)\n", arr->length);
+    //         printf("  Elements:\n");
+    //         for (size_t i = 0; i < arr->length; i++) {
+    //             printf("    [%zu]: %p\n", i, (void *)arr->slots[i]);
+    //         }
+    //         break;
+    //     }
+
+    //     case BROKEN_HEART:
+    //         printf("BROKEN_HEART (forward to: %p)\n",
+    //                (void *)get_forward_address(current));
+    //         break;
+
+    //     default: {
+    //         TClass *template = find_class_by_type(obj->type);
+    //         if (template) {
+    //             printf("CLASS_TYPE (%ld)\n", obj->type);
+    //             RClass *cls = (RClass *)obj;
+    //             printf("  Parent: %p\n", (void *)cls->parent);
+    //             printf("  Variables:\n");
+    //             for (int i = 0; i < vector_size(template->varNames); i++) {
+    //                 char *varName = (char *)vector_get(template->varNames, i);
+    //                 printf("    %s: %p\n", varName, (void *)cls->var_slots[i]);
+    //             }
+    //         } else {
+    //             printf("UNKNOWN_TYPE (%ld)\n", obj->type);
+    //         }
+    //         break;
+    //     }
+    //     }
+
+    //     current += size;
+    // }
+
+    printf("\nTotal objects: %d\n", obj_count);
+    printf("Total heap usage: %ld bytes\n", heap_ptr - heap_start);
+    printf("=== End of Heap Objects ===\n\n");
+
+    intptr_t total_stack_size = 0;
+    intptr_t total_null = 0;
+    for (int i = 0; i < vector_size(machine->stack); i++) {
+        if (((RTObj *)vector_get(machine->stack, i))->type == NULL_TYPE) {
+            total_null++;
+        }
+        total_stack_size += get_object_size((intptr_t)vector_get(machine->stack, i));
+    }
+    printf("Total stack usage: %ld bytes\n", total_stack_size);
+    printf("Total null objects: %ld\n", total_null);
 }

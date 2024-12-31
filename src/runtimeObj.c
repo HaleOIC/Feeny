@@ -19,7 +19,11 @@ RArray *newArrayObj(int length, RTObj *initValue) {
     rv->type = ARRAY_TYPE;
     rv->length = length;
     for (int i = 0; i < length; i++) {
-        rv->slots[i] = (intptr_t)initValue;
+        if (!is_forward((intptr_t)initValue)) {
+            rv->slots[i] = (intptr_t)initValue;
+        } else {
+            rv->slots[i] = (intptr_t)get_forward_address((intptr_t)initValue);
+        }
     }
     return rv;
 }

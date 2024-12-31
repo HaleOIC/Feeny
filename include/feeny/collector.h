@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
-#define HEAP_SIZE (1024 * 1024) // 1MB heap size
+#define HEAP_SIZE (1024 * 1024 * 1024) // 1GB heap size
 
 extern intptr_t heap_start;
 extern intptr_t heap_ptr;
@@ -20,10 +20,11 @@ void init_heap();
 void *halloc(int);
 int garbage_collector();
 void print_detailed_memory();
+void print_heap_objects();
 
 // Forwarding pointers related operations
-static int is_forward(intptr_t);
-static void set_forward_address(intptr_t, intptr_t);
-static intptr_t get_forward_address(intptr_t);
+int is_forward(intptr_t);
+void set_forward_address(intptr_t, intptr_t);
+intptr_t get_forward_address(intptr_t);
 
 #endif // COLLECTOR_H
