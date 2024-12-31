@@ -108,16 +108,14 @@ int main(int argc, char **argv) {
             printf("Initializing VM...\n");
 
         // Allocate new machine and link the program to it
-        Machine *m = (Machine *)malloc(sizeof(Machine));
-        initvm(p, m);
+        initvm(p);
 
         if (verbose)
             printf("Running VM...\n");
 
         // Actually run the vm to get output
-        runvm(m);
+        runvm();
 
-        free(m);
         break;
     }
     case MODE_FULL: {
@@ -135,15 +133,14 @@ int main(int argc, char **argv) {
 
         // Allocate new machine and link the program to it
         Machine *machine = (Machine *)malloc(sizeof(Machine));
-        initvm(program, machine);
+        initvm(program);
 
         if (verbose)
             printf("Running VM...\n");
 
         // Actually run the vm to get output
-        runvm(machine);
+        runvm();
 
-        free(machine);
         break;
     }
     }

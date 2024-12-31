@@ -35,7 +35,7 @@ RClass *newClassObj(ObjType type, int slotNum) {
 }
 
 TClass *newTemplateClass(ObjType type, int index) {
-    TClass *rv = (TClass *)halloc(sizeof(TClass));
+    TClass *rv = (TClass *)malloc(sizeof(TClass));
     rv->type = type;
     rv->poolIndex = index;
     rv->varNames = make_vector();

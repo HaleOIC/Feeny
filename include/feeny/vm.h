@@ -2,13 +2,14 @@
 #define VM_H
 #include "bytecode.h"
 #include "runtimeObj.h"
+#include "types.h"
 #include "utils.h"
 
 typedef struct Frame Frame;
 struct Frame {
     Frame *parent;
     intptr_t ra; // Return address
-    Vector *codes;
+    MethodValue *method;
     intptr_t locals[];
 };
 static Frame *newFrame(MethodValue *);
@@ -22,10 +23,12 @@ typedef struct {
     intptr_t ip;     // Instruction pointer
 } Machine;
 
+extern Machine *machine;
+
 /* Link source program to vm */
-void initvm(Program *, Machine *);
+void initvm(Program *);
 /* Run vm to execute source program */
-void runvm(Machine *);
+void runvm();
 /* Handle all kinds of instructions */
 static MethodValue *lookup_method(Machine *, ObjType, char *);
 static void handle_lit_instr(Machine *, LitIns *);

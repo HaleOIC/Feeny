@@ -4,8 +4,9 @@
 #include <string.h>
 #include <sys/mman.h>
 
-// #define DEBUG 1
+// #define DEBUG 0
 #define MXARGS 32
+Machine *machine = NULL;
 
 static void print_classes(Vector *classes) {
     for (int i = 0; i < vector_size(classes); i++) {
@@ -83,7 +84,7 @@ static int findSlotIndex(Machine *machine, ObjType type, char *name) {
 static void make_frame(Machine *machine, MethodValue *method) {
     // Allocate memory for new frame
     int slots_num = method->nargs + method->nlocals;
-    Frame *frame = (Frame *)halloc(sizeof(Frame) + sizeof(intptr_t) * slots_num);
+    Frame *frame = (Frame *)malloc(sizeof(Frame) + sizeof(intptr_t) * slots_num);
     if (!frame) {
         fprintf(stderr, "Memory allocation failed for new frame\n");
         exit(1);
@@ -91,7 +92,7 @@ static void make_frame(Machine *machine, MethodValue *method) {
 
     // Initialize frame components
     frame->parent = machine->cur; // Link to previous frame
-    frame->codes = method->code;
+    frame->method = method;
     frame->ra = machine->ip + 1; // Save current ip as return address
     for (int i = 0; i < slots_num; i++) {
         frame->locals[i] = 0;
@@ -190,21 +191,21 @@ static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
     }
 }
 
-void initvm(Program *program, Machine *machine) {
+void initvm(Program *program) {
+    if (!machine) {
+        machine = (Machine *)malloc(sizeof(Machine));
+    }
     machine->program = program;
+    machine->global = NULL;
     machine->stack = make_vector();
     machine->classes = make_vector();
     machine->cur = NULL;
     machine->ip = 0;
 
-    // Initialize garbage collector
-    init_heap();
-
     // Attach all related classes info to virtual machine
     // Global can be seen as a special class and Object
     TClass *globalTemplate = newTemplateClass(GLOBAL_TYPE, -1);
     addSlotInfo(machine->program->values, globalTemplate, machine->program->slots);
-    machine->global = newClassObj(GLOBAL_TYPE, vector_size(globalTemplate->varNames));
     vector_add(machine->classes, globalTemplate);
 
     for (int i = 0; i < vector_size(program->values); i++) {
@@ -216,9 +217,11 @@ void initvm(Program *program, Machine *machine) {
             vector_add(machine->classes, newTemplate);
         }
     }
-#ifdef DEBUG
-    print_classes(machine->classes);
-#endif
+
+    // Initialize garbage collector
+    init_heap();
+    machine->global = newClassObj(GLOBAL_TYPE, vector_size(globalTemplate->varNames));
+
     // Init local frame
     MethodValue *method = vector_get(program->values, program->entry);
     make_frame(machine, method);
@@ -590,7 +593,7 @@ static void handle_drop_instr(Machine *machine) {
     vector_pop(machine->stack);
 }
 
-void runvm(Machine *machine) {
+void runvm() {
     Program *program = machine->program;
 
     while (1) {
@@ -603,12 +606,12 @@ void runvm(Machine *machine) {
         if (machine->ip == -1 && machine->cur == NULL) {
             break;
         }
-        if (machine->ip >= vector_size(machine->cur->codes)) {
+        if (machine->ip >= vector_size(machine->cur->method->code)) {
             fprintf(stderr, "Error: execute bytecodes out of bound!\n");
             exit(1);
         }
 
-        ByteIns *instr = (ByteIns *)vector_get(machine->cur->codes, machine->ip);
+        ByteIns *instr = (ByteIns *)vector_get(machine->cur->method->code, machine->ip);
 
 #ifdef DEBUG
         print_ins(instr);
@@ -678,5 +681,5 @@ void runvm(Machine *machine) {
         machine->ip++;
     }
 
-    print_detailed_memory();
+    // print_detailed_memory();
 }
