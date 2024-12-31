@@ -1,6 +1,7 @@
 #ifndef RUNTIMEOBJ_H
 #define RUNTIMEOBJ_H
 
+#include "collector.h"
 #include "utils.h"
 #include <stdint.h>
 

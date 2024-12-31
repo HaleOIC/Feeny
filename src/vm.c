@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 
 // #define DEBUG 1
+#define MXARGS 32
 
 static void print_classes(Vector *classes) {
     for (int i = 0; i < vector_size(classes); i++) {
@@ -24,7 +25,6 @@ static void print_classes(Vector *classes) {
 }
 
 static MethodValue *lookup_method(Machine *machine, ObjType type, char *method_name) {
-
     Vector *pool = machine->program->values;
 
     // Find the name(string) constant's index
@@ -83,7 +83,7 @@ static int findSlotIndex(Machine *machine, ObjType type, char *name) {
 static void make_frame(Machine *machine, MethodValue *method) {
     // Allocate memory for new frame
     int slots_num = method->nargs + method->nlocals;
-    Frame *frame = (Frame *)malloc(sizeof(Frame) + sizeof(intptr_t) * slots_num);
+    Frame *frame = (Frame *)halloc(sizeof(Frame) + sizeof(intptr_t) * slots_num);
     if (!frame) {
         fprintf(stderr, "Memory allocation failed for new frame\n");
         exit(1);
@@ -103,6 +103,9 @@ static void make_frame(Machine *machine, MethodValue *method) {
     machine->ip = 0;
 
     // Scan through method's code to process all labels
+    if (method->processed == 1) {
+        return;
+    }
     Map *labels = newMap();
     for (int i = 0; i < vector_size(method->code); i++) {
         ByteIns *instr = vector_get(method->code, i);
@@ -125,9 +128,6 @@ static void make_frame(Machine *machine, MethodValue *method) {
     }
 
     // Process all branch and goto byte instructions from name idx to true address
-    if (method->processed == 1) {
-        return;
-    }
     for (int i = 0; i < vector_size(method->code); i++) {
         ByteIns *instr = vector_get(method->code, i);
         switch (instr->tag) {
@@ -193,9 +193,12 @@ static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
 void initvm(Program *program, Machine *machine) {
     machine->program = program;
     machine->stack = make_vector();
-    machine->cur = NULL;
     machine->classes = make_vector();
+    machine->cur = NULL;
     machine->ip = 0;
+
+    // Initialize garbage collector
+    init_heap();
 
     // Attach all related classes info to virtual machine
     // Global can be seen as a special class and Object
@@ -248,7 +251,7 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     }
 
     // Get arguments from stack
-    RTObj **args = malloc(sizeof(RTObj *) * ins->arity);
+    RTObj *args[MXARGS];
     for (int i = ins->arity - 1; i >= 0; i--) {
         args[i] = vector_pop(machine->stack);
         if (((Value *)args[i])->tag != INT_TYPE) {
@@ -269,7 +272,6 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     }
 
     // Cleanup and push null as return value
-    free(args);
     vector_add(machine->stack, newNullObj());
 }
 
@@ -349,9 +351,11 @@ static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
 }
 
 static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
-    Vector *args = make_vector();
-    for (int i = 0; i < ins->arity - 1; i++) {
-        vector_add(args, vector_pop(machine->stack));
+    RTObj *args[MXARGS];
+    int arg_count = ins->arity - 1;
+
+    for (int i = 0; i < arg_count; i++) {
+        args[i] = vector_pop(machine->stack);
     }
 
     RTObj *receiver = vector_pop(machine->stack);
@@ -365,7 +369,7 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             exit(1);
         }
 
-        RTObj *other = vector_get(args, 0);
+        RTObj *other = args[0];
         if (other->type != INT_TYPE) {
             fprintf(stderr, "Error: Type check error on Int Object invoke\n");
             exit(1);
@@ -431,8 +435,8 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
                 exit(1);
             }
 
-            RTObj *index = vector_get(args, 1);
-            RTObj *value = vector_get(args, 0);
+            RTObj *index = args[1];
+            RTObj *value = args[0];
             if (index->type != INT_TYPE) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
@@ -448,7 +452,7 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
                 exit(1);
             }
 
-            RTObj *index = vector_get(args, 0);
+            RTObj *index = args[0];
             if (index->type != INT_TYPE) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
@@ -501,13 +505,12 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         machine->cur->locals[0] = (intptr_t)receiver;
 
         for (int i = 0; i < ins->arity - 1; i++) {
-            machine->cur->locals[ins->arity - i - 1] = (intptr_t)vector_get(args, i);
+            machine->cur->locals[ins->arity - i - 1] = (intptr_t)args[i];
         }
     } else {
         fprintf(stderr, "Error: Cannot invoke any operation on Null Object\n");
         exit(1);
     }
-    vector_free(args);
 }
 
 static void handle_call_instr(Machine *machine, CallIns *ins) {
@@ -674,4 +677,6 @@ void runvm(Machine *machine) {
         }
         machine->ip++;
     }
+
+    print_detailed_memory();
 }

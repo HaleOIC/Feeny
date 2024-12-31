@@ -1,4 +1,5 @@
 #include "feeny/utils.h"
+#include "feeny/collector.h"
 
 //============================================================
 //===================== CONVENIENCE ==========================
@@ -41,7 +42,25 @@ void print_string(char *str) {
 //===================== VECTORS ==============================
 //============================================================
 
+#include <execinfo.h>
+#include <stdio.h>
+
+void print_trace(const char *func_name) {
+    void *array[10];
+    int size = backtrace(array, 10);
+    char **strings = backtrace_symbols(array, size);
+
+    printf("\n=== %s called from: ===\n", func_name);
+    for (int i = 0; i < size; i++) {
+        printf("%s\n", strings[i]);
+    }
+    printf("=====================\n");
+
+    free(strings);
+}
+
 Vector *make_vector() {
+    // print_trace(__func__);
     Vector *v = (Vector *)malloc(sizeof(Vector));
     v->size = 0;
     v->capacity = 8;
@@ -50,14 +69,21 @@ Vector *make_vector() {
 }
 
 void vector_ensure_capacity(Vector *v, int c) {
-    if (v->capacity < c) {
-        int c2 = max(v->capacity * 2, c);
-        void **a2 = malloc(sizeof(void *) * c2);
-        memcpy(a2, v->array, sizeof(void *) * v->size);
-        free(v->array);
-        v->capacity = c2;
-        v->array = a2;
+    if (v->capacity >= c) {
+        return;
     }
+    int new_capacity;
+    if (v->capacity < 1024) {
+        new_capacity = max(v->capacity * 2, c);
+    } else {
+        new_capacity = max(v->capacity + (v->capacity >> 1), c);
+    }
+
+    void **a2 = malloc(sizeof(void *) * new_capacity);
+    memcpy(a2, v->array, sizeof(void *) * v->size);
+    free(v->array);
+    v->capacity = new_capacity;
+    v->array = a2;
 }
 
 void vector_set_length(Vector *v, int len, void *x) {
