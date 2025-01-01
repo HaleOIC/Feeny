@@ -438,10 +438,6 @@ static void compileSetSlot(CompileInfo *info, SetSlotExp *expr) {
     set_slot->tag = SET_SLOT_OP;
     set_slot->name = name_idx;
     vector_add(info->scopeContext->instructions, set_slot);
-
-    ByteIns *drop_ins = (ByteIns *)malloc(sizeof(ByteIns));
-    drop_ins->tag = DROP_OP;
-    vector_add(info->scopeContext->instructions, drop_ins);
 }
 
 static void collectVarSlot(CompileInfo *info, SlotVar *var_slot) {
@@ -560,7 +556,9 @@ static void compileIfExpr(CompileInfo *info, IfExp *ifExp) {
     branch->name = conseq_idx;
     vector_add(info->scopeContext->instructions, branch);
 
-    if (ifExp->alt != NULL) {
+    // Else block
+    if (ifExp->alt->tag == EXP_STMT && ((ScopeExp *)ifExp->alt)->exp->tag == NULL_EXP) {
+    } else {
         ScopeContext *alt_scope = newScopeContext(info->scopeContext);
         info->scopeContext = alt_scope;
 
@@ -701,17 +699,48 @@ static void compileSetExpr(CompileInfo *info, SetExp *setExp) {
                 set_slot->name = name_idx;
                 vector_add(info->scopeContext->instructions, set_slot);
             }
-            ByteIns *drop_ins = (ByteIns *)malloc(sizeof(ByteIns));
-            drop_ins->tag = DROP_OP;
-            vector_add(info->scopeContext->instructions, drop_ins);
         } else {
             fprintf(stderr, "Error: Undefined variable '%s' in assignment\n", setExp->name);
             exit(1);
         }
     }
-    ByteIns *drop_ins = (ByteIns *)malloc(sizeof(ByteIns));
-    drop_ins->tag = DROP_OP;
-    vector_add(info->scopeContext->instructions, drop_ins);
+}
+
+static void compileVarStmt(CompileInfo *info, ScopeVar *varStmt) {
+    if (info->scopeContext->flag == GLOBAL) {
+        StringValue *name = newStringValue(strdup(varStmt->name));
+        int name_idx = addConstantValue(info->pool, (Value *)name);
+
+        SlotValue *slot = newSlotValue(name_idx);
+        int slot_idx = addConstantValue(info->pool, (Value *)slot);
+
+        vector_add(info->objContext->slots, (void *)(intptr_t)slot_idx);
+        vector_add(info->objContext->names, varStmt->name);
+
+        if (varStmt->exp != NULL) {
+            compileExpr(info, varStmt->exp);
+
+            SetGlobalIns *set_ins = (SetGlobalIns *)malloc(sizeof(SetGlobalIns));
+            set_ins->tag = SET_GLOBAL_OP;
+            set_ins->name = name_idx;
+            vector_add(info->scopeContext->instructions, set_ins);
+        }
+    } else {
+        StringValue *name = newStringValue(strdup(varStmt->name));
+        int name_idx = addConstantValue(info->pool, (Value *)name);
+        vector_add(info->scopeContext->locals, varStmt->name);
+        info->scopeContext->nlocals++;
+        int local_idx = findLocalVar(info->scopeContext, varStmt->name);
+
+        if (varStmt->exp != NULL) {
+            compileExpr(info, varStmt->exp);
+
+            SetLocalIns *set_ins = (SetLocalIns *)malloc(sizeof(SetLocalIns));
+            set_ins->tag = SET_LOCAL_OP;
+            set_ins->idx = local_idx;
+            vector_add(info->scopeContext->instructions, set_ins);
+        }
+    }
 }
 
 static void compileExpr(CompileInfo *info, Exp *expr) {
@@ -761,46 +790,6 @@ static void compileExpr(CompileInfo *info, Exp *expr) {
         compileRefExpr(info, (RefExp *)expr);
         break;
     }
-}
-
-static void compileVarStmt(CompileInfo *info, ScopeVar *varStmt) {
-    if (info->scopeContext->flag == GLOBAL) {
-        StringValue *name = newStringValue(strdup(varStmt->name));
-        int name_idx = addConstantValue(info->pool, (Value *)name);
-
-        SlotValue *slot = newSlotValue(name_idx);
-        int slot_idx = addConstantValue(info->pool, (Value *)slot);
-
-        vector_add(info->objContext->slots, (void *)(intptr_t)slot_idx);
-        vector_add(info->objContext->names, varStmt->name);
-
-        if (varStmt->exp != NULL) {
-            compileExpr(info, varStmt->exp);
-
-            SetGlobalIns *set_ins = (SetGlobalIns *)malloc(sizeof(SetGlobalIns));
-            set_ins->tag = SET_GLOBAL_OP;
-            set_ins->name = name_idx;
-            vector_add(info->scopeContext->instructions, set_ins);
-        }
-    } else {
-        StringValue *name = newStringValue(strdup(varStmt->name));
-        int name_idx = addConstantValue(info->pool, (Value *)name);
-        vector_add(info->scopeContext->locals, varStmt->name);
-        info->scopeContext->nlocals++;
-        int local_idx = findLocalVar(info->scopeContext, varStmt->name);
-
-        if (varStmt->exp != NULL) {
-            compileExpr(info, varStmt->exp);
-
-            SetLocalIns *set_ins = (SetLocalIns *)malloc(sizeof(SetLocalIns));
-            set_ins->tag = SET_LOCAL_OP;
-            set_ins->idx = local_idx;
-            vector_add(info->scopeContext->instructions, set_ins);
-        }
-    }
-    ByteIns *drop_ins = (ByteIns *)malloc(sizeof(ByteIns));
-    drop_ins->tag = DROP_OP;
-    vector_add(info->scopeContext->instructions, drop_ins);
 }
 
 static void compileFnStmt(CompileInfo *info, ScopeFn *fnStmt) {
@@ -881,8 +870,7 @@ Program *compile(ScopeStmt *stmt) {
     // Compile program from global level
     compileScope(info, stmt);
 
-    // Add null and return to entry function
-    addNullInstr(info);
+    // Add return to entry function
     addReturnInstr(info);
 
     // Add global context's binding function as new slot

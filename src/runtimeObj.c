@@ -1,5 +1,19 @@
 #include "feeny/runtimeObj.h"
 
+#include <execinfo.h>
+#include <stdio.h>
+
+void print_caller() {
+    void *callstack[2];
+    int frames = backtrace(callstack, 2);
+    char **strs = backtrace_symbols(callstack, frames);
+
+    if (frames >= 2) {
+        printf("Called by: %s\n", strs[1]);
+    }
+    free(strs);
+}
+
 RInt *newIntObj(int value) {
     RInt *rv = (RInt *)halloc(sizeof(RInt));
     rv->type = INT_TYPE;
@@ -8,6 +22,7 @@ RInt *newIntObj(int value) {
 }
 
 RNull *newNullObj() {
+    // print_caller();
     RNull *rv = (RNull *)halloc(sizeof(RNull));
     rv->type = NULL_TYPE;
     rv->space = 0;

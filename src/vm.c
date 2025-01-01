@@ -4,7 +4,9 @@
 #include <string.h>
 #include <sys/mman.h>
 
-// #define DEBUG 0
+// #define EXEC_DEBUG 0
+// #define MEMORY_DEBUG 0
+
 #define MXARGS 32
 Machine *machine = NULL;
 
@@ -273,9 +275,6 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
         }
         str_format++;
     }
-
-    // Cleanup and push null as return value
-    // vector_add(machine->stack, newNullObj());
 }
 
 static void handle_array_instr(Machine *machine) {
@@ -286,8 +285,10 @@ static void handle_array_instr(Machine *machine) {
         fprintf(stderr, "Array length must be integer\n");
         exit(1);
     }
+    // !important: add inital_value to stack in case of GC can not see it
     vector_add(machine->stack, init_val);
     RArray *array = newArrayObj((int)((RInt *)length_val)->value, init_val);
+    vector_pop(machine->stack);
     vector_add(machine->stack, array);
 }
 
@@ -310,7 +311,12 @@ static void handle_object_instr(Machine *machine, ObjectIns *ins) {
     for (int i = slotNum - 1; i >= 0; i--) {
         instance->var_slots[i] = (intptr_t)vector_pop(machine->stack);
     }
-    instance->parent = (intptr_t)vector_pop(machine->stack);
+    intptr_t fakeParent = (intptr_t)vector_pop(machine->stack);
+    if (((RTObj *)fakeParent)->type == NULL_TYPE) {
+        instance->parent = 0;
+    } else {
+        instance->parent = fakeParent;
+    }
     vector_add(machine->stack, instance);
 }
 
@@ -350,7 +356,6 @@ static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
     }
 
     instance->var_slots[slotIndex] = value;
-    vector_add(machine->stack, (void *)value);
 }
 
 static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
@@ -447,8 +452,6 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
 
             int arrayIndex = (int)((RInt *)index)->value;
             arr->slots[arrayIndex] = (intptr_t)value;
-
-            vector_add(machine->stack, newNullObj());
         } else if (strcmp(slotName, "get") == 0) {
             if (ins->arity != 2) {
                 fprintf(stderr, "Error: Array Object get operation must take one argument\n");
@@ -477,16 +480,10 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         }
         machine->ip++;
     } else if (receiver->type >= OBJECT_TYPE) {
-
         RTObj *current = receiver;
         MethodValue *method = NULL;
 
         while (current) {
-#ifdef DEBUG
-            if (current != 0) {
-                printf("Searched type: %ld\n", (RTObj *)current->type);
-            }
-#endif
             method = lookup_method(machine, current->type, slotName);
             if (method) {
                 break;
@@ -543,7 +540,7 @@ static void handle_get_local_instr(Machine *machine, GetLocalIns *ins) {
 }
 
 static void handle_set_local_instr(Machine *machine, SetLocalIns *ins) {
-    machine->cur->locals[ins->idx] = (intptr_t)vector_peek(machine->stack);
+    machine->cur->locals[ins->idx] = (intptr_t)vector_pop(machine->stack);
 }
 
 static void handle_get_global_instr(Machine *machine, GetGlobalIns *ins) {
@@ -564,7 +561,7 @@ static void handle_set_global_instr(Machine *machine, SetGlobalIns *ins) {
         exit(1);
     }
     int slotIndex = findSlotIndex(machine, GLOBAL_TYPE, global->value);
-    RTObj *top = vector_peek(machine->stack);
+    RTObj *top = vector_pop(machine->stack);
     machine->global->var_slots[slotIndex] = (intptr_t)top;
 }
 
@@ -598,7 +595,7 @@ void runvm() {
 
     while (1) {
 
-#ifdef DEBUG
+#ifdef EXEC_DEBUG
         printf("cur ip: %ld\n", machine->ip);
 #endif
 
@@ -613,7 +610,7 @@ void runvm() {
 
         ByteIns *instr = (ByteIns *)vector_get(machine->cur->method->code, machine->ip);
 
-#ifdef DEBUG
+#ifdef EXEC_DEBUG
         print_ins(instr);
         printf("\n");
 #endif
@@ -680,6 +677,8 @@ void runvm() {
         }
         machine->ip++;
     }
-
-    // print_detailed_memory();
+#ifdef MEMORY_DEBUG
+    print_detailed_memory();
+    print_heap_objects();
+#endif
 }

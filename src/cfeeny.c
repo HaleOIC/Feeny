@@ -14,15 +14,13 @@ void print_usage(const char *program_name) {
     printf("Usage: %s [options] <filename>\n", program_name);
     printf("Options:\n");
     printf("  -a, --ast             Run AST interpreter (default)\n");
-    printf("  -b, --bytecode        Run bytecode interpreter\n");
-    printf("  -f, --fullcompile     Run bytecode compiler and interpreter\n");
+    printf("  -f, --fullBytecode    Run bytecode compiler and interpreter\n");
     printf("  -h, --help            Show this help message\n");
     exit(1);
 }
 
 typedef enum {
     MODE_AST,
-    MODE_BYTECODE,
     MODE_FULL
 } RunMode;
 
@@ -32,7 +30,6 @@ int main(int argc, char **argv) {
 
     static struct option long_options[] = {
         {"ast", no_argument, 0, 'a'},
-        {"bytecode", no_argument, 0, 'b'},
         {"full", no_argument, 0, 'f'},
         {"verbose", no_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
@@ -41,14 +38,11 @@ int main(int argc, char **argv) {
     int option;
     int option_index = 0;
 
-    while ((option = getopt_long(argc, argv, "abvhf",
+    while ((option = getopt_long(argc, argv, "avhf",
                                  long_options, &option_index)) != -1) {
         switch (option) {
         case 'a':
             mode = MODE_AST;
-            break;
-        case 'b':
-            mode = MODE_BYTECODE;
             break;
         case 'f':
             mode = MODE_FULL;
@@ -95,29 +89,6 @@ int main(int argc, char **argv) {
         break;
     }
 
-    case MODE_BYTECODE: {
-        if (verbose)
-            printf("Loading bytecode from file...\n");
-        Program *p = load_bytecode(filename);
-        if (p == NULL) {
-            fprintf(stderr, "Error: Failed to load bytecode from file: %s\n", filename);
-            return 1;
-        }
-
-        if (verbose)
-            printf("Initializing VM...\n");
-
-        // Allocate new machine and link the program to it
-        initvm(p);
-
-        if (verbose)
-            printf("Running VM...\n");
-
-        // Actually run the vm to get output
-        runvm();
-
-        break;
-    }
     case MODE_FULL: {
         if (verbose) {
             printf("Loading ast from file...\n");
@@ -130,6 +101,8 @@ int main(int argc, char **argv) {
         Program *program = compile(stmt);
         if (verbose)
             printf("Initializing VM...\n");
+
+        // print_prog(program);
 
         // Allocate new machine and link the program to it
         Machine *machine = (Machine *)malloc(sizeof(Machine));

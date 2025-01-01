@@ -1,6 +1,11 @@
 #include "feeny/collector.h"
 #include <sys/resource.h>
 
+// #define MEMORY_DEBUG 0
+
+// heap_size = 1MB
+size_t heap_size = 1024;
+
 // Core variables for garbage collector
 intptr_t heap_start = 0;
 intptr_t heap_ptr = 0;
@@ -8,10 +13,6 @@ intptr_t to_space = 0;
 intptr_t to_ptr = 0;
 size_t total_bytes = 0;
 
-// 200 -> 1.45
-// 180 -> 1.27
-// 90 -> 0.661
-// 1 -> 0.034
 // Helper function: check if an address is forward pointer
 int is_forward(intptr_t address) {
     return ((RTObj *)address)->type == BROKEN_HEART;
@@ -34,7 +35,7 @@ intptr_t get_forward_address(intptr_t obj) {
 
 // Check if pointer is within heap
 static int is_heap_ptr(intptr_t ptr) {
-    return ptr >= heap_start && ptr < heap_start + HEAP_SIZE;
+    return ptr >= heap_start && ptr < heap_start + heap_size;
 }
 
 TClass *find_class_by_type(ObjType type) {
@@ -87,7 +88,6 @@ static intptr_t copy_object(intptr_t obj) {
 
     memcpy((void *)to_ptr, (void *)obj, size);
     to_ptr += size;
-    // printf("Copied object from %p to %p using %ld bytes\n", (void *)obj, (void *)new_location, size);
 
     // Set forwarding address
     set_forward_address(obj, new_location);
@@ -144,7 +144,6 @@ static void scan_root_set() {
     TClass *globalTemplate = find_class_by_type(GLOBAL_TYPE);
     if (machine->global) {
         for (int i = 0; i < vector_size(globalTemplate->varNames); i++) {
-            // printf("Scanning global var slot %p\n", (void *)machine->global->var_slots[i]);
             machine->global->var_slots[i] = copy_object(machine->global->var_slots[i]);
         }
         machine->global = (RClass *)copy_object((intptr_t)machine->global);
@@ -155,7 +154,6 @@ static void scan_root_set() {
     while (frame) {
         // Scan local variables
         for (int i = 0; i < frame->method->nargs + frame->method->nlocals; i++) {
-            // printf("Scanning frame local %p\n", (void *)frame->locals[i]);
             frame->locals[i] = copy_object(frame->locals[i]);
         }
         frame = frame->parent;
@@ -164,14 +162,13 @@ static void scan_root_set() {
     // Scan operand stack
     for (int i = 0; i < vector_size(machine->stack); i++) {
         intptr_t obj = (intptr_t)vector_get(machine->stack, i);
-        // printf("Scanning stack object %p\n", (void *)obj);
         vector_set(machine->stack, i, (void *)copy_object(obj));
     }
 }
 
 void init_heap() {
     // Allocate 1GB heap space for from-space and to-space
-    heap_start = (intptr_t)mmap(NULL, HEAP_SIZE,
+    heap_start = (intptr_t)mmap(NULL, heap_size,
                                 PROT_READ | PROT_WRITE,
                                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (heap_start == -1) {
@@ -180,7 +177,7 @@ void init_heap() {
     }
     heap_ptr = heap_start;
 
-    to_space = (intptr_t)mmap(NULL, HEAP_SIZE,
+    to_space = (intptr_t)mmap(NULL, heap_size,
                               PROT_READ | PROT_WRITE,
                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (to_space == -1) {
@@ -190,47 +187,124 @@ void init_heap() {
     to_ptr = to_space;
     total_bytes = 0;
 }
+int expand_heap() {
+#ifdef MEMORY_DEBUG
+    printf("\n=== Expanding Heap ===\n");
+    printf("Current heap_size: %zu, new_size: %zu\n", heap_size, heap_size << 1);
+    printf("Before expansion:\n");
+    printf("  heap_start: %p\n", (void *)heap_start);
+    printf("  heap_ptr: %p (used: %zu bytes)\n", (void *)heap_ptr, heap_ptr - heap_start);
+    printf("  to_space: %p\n", (void *)to_space);
+#endif
+    size_t new_size = heap_size << 1;
+
+    intptr_t new_heap = (intptr_t)mmap(NULL, new_size,
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (new_heap == -1) {
+        printf("Failed to allocate new heap space!\n");
+        return 0;
+    }
+
+    intptr_t old_to_space = to_space;
+    to_space = new_heap;
+#ifdef MEMORY_DEBUG
+    printf("Allocated new heap space at: %p\n", (void *)new_heap);
+    printf("Set new to_space: %p (old was: %p)\n", (void *)to_space, (void *)old_to_space);
+
+    printf("\nStarting garbage collection...\n");
+#endif
+    garbage_collector();
+
+#ifdef MEMORY_DEBUG
+    printf("Garbage collection completed\n");
+    printf("After GC:\n");
+    printf("  heap_start: %p\n", (void *)heap_start);
+    printf("  heap_ptr: %p (used: %zu bytes)\n", (void *)heap_ptr, heap_ptr - heap_start);
+    printf("  to_space: %p\n", (void *)to_space);
+
+    printf("\nReleasing old spaces...\n");
+    printf("  Releasing to_space: %p (size: %zu)\n", (void *)to_space, heap_size);
+    printf("  Releasing old_to_space: %p (size: %zu)\n", (void *)old_to_space, heap_size);
+#endif
+    munmap((void *)to_space, heap_size);
+    munmap((void *)old_to_space, heap_size);
+
+    intptr_t new_to_space = (intptr_t)mmap(NULL, new_size,
+                                           PROT_READ | PROT_WRITE,
+                                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (new_to_space == -1) {
+        printf("Failed to allocate new to_space!\n");
+        munmap((void *)new_heap, new_size);
+        return 0;
+    }
+
+    to_space = new_to_space;
+    heap_size = new_size;
+
+#ifdef MEMORY_DEBUG
+    printf("Allocated new to_space at: %p\n", (void *)new_to_space);
+    printf("\nFinal heap state:\n");
+    printf("  heap_start: %p\n", (void *)heap_start);
+    printf("  heap_ptr: %p (used: %zu bytes)\n", (void *)heap_ptr, heap_ptr - heap_start);
+    printf("  to_space: %p\n", (void *)to_space);
+    printf("Heap expanded from %zu to %zu bytes\n", heap_size / 2, heap_size);
+    printf("=== Heap Expansion Complete ===\n\n");
+#endif
+    return 1;
+}
 
 int garbage_collector() {
-    // Reset to-space pointer
     to_ptr = to_space;
 
     memset((void *)to_space, 0, heap_ptr - heap_start);
 
-    // Copy root set
     scan_root_set();
 
-    // Scan all copied objects
     intptr_t scan = to_space;
+    int objects_scanned = 0;
     while (scan < to_ptr) {
         scan_object(scan);
         scan += get_object_size(scan);
+        objects_scanned++;
     }
 
-    // Swap spaces
     intptr_t temp = heap_start;
     heap_start = to_space;
     to_space = temp;
     heap_ptr = to_ptr;
-
-    return 1; // Collection successful
+    return 1;
 }
-
 void *halloc(int nbytes) {
     // Align to 8 bytes
     nbytes = (nbytes + 7) & ~7;
 
-    // Check if enough space in from-space
-    if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
-        // If not enough space, run garbage collector
-        if (!garbage_collector()) {
-            fprintf(stderr, "Error: Out of memory\n");
-            exit(1);
-        }
-        if (heap_ptr + nbytes > heap_start + HEAP_SIZE) {
-            print_heap_objects();
-            fprintf(stderr, "Error: Out of memory after GC\n");
-            exit(1);
+    // Calculate current heap usage percentage
+    double usage_percentage = ((double)(heap_ptr - heap_start) / heap_size) * 100;
+
+    // If we don't have enough space for this allocation or usage is over 85%, try GC first
+    if (heap_ptr + nbytes > heap_start + heap_size || usage_percentage > 90.0) {
+        // printf("Before GC: usage is %.2f%%\n", usage_percentage);
+
+        // Try garbage collection
+        garbage_collector();
+
+        // Recalculate usage after GC
+        usage_percentage = ((double)(heap_ptr - heap_start) / heap_size) * 100;
+        // printf("After GC: usage is %.2f%%\n", usage_percentage);
+
+        // If after GC still over 70% or not enough space, expand heap
+        if (usage_percentage > 70.0 || heap_ptr + nbytes > heap_start + heap_size) {
+            // printf("Usage still high (%.2f%%) after GC, expanding heap\n", usage_percentage);
+            if (!expand_heap()) {
+                print_heap_objects();
+                fprintf(stderr, "Fatal: Memory exhausted. Cannot expand heap further.\n");
+                fprintf(stderr, "Current heap size: %zu bytes\n", heap_size);
+                fprintf(stderr, "Requested allocation: %d bytes\n", nbytes);
+                fprintf(stderr, "Available space: %ld bytes\n",
+                        (heap_start + heap_size) - heap_ptr);
+                exit(1);
+            }
         }
     }
 
@@ -272,59 +346,6 @@ void print_heap_objects() {
 
     intptr_t current = heap_start;
     int obj_count = 0;
-
-    // while (current < heap_ptr) {
-    //     RTObj *obj = (RTObj *)current;
-    //     size_t size = get_object_size(current);
-
-    //     printf("\nObject #%d at %p (size: %zu bytes):\n", ++obj_count, (void *)current, size);
-    //     printf("  Type: ");
-
-    //     switch (obj->type) {
-    //     case INT_TYPE:
-    //         printf("INT_TYPE (%ld)\n", ((RInt *)obj)->value);
-    //         break;
-
-    //     case NULL_TYPE:
-    //         printf("NULL_TYPE\n");
-    //         break;
-
-    //     case ARRAY_TYPE: {
-    //         RArray *arr = (RArray *)obj;
-    //         printf("ARRAY_TYPE (length: %zu)\n", arr->length);
-    //         printf("  Elements:\n");
-    //         for (size_t i = 0; i < arr->length; i++) {
-    //             printf("    [%zu]: %p\n", i, (void *)arr->slots[i]);
-    //         }
-    //         break;
-    //     }
-
-    //     case BROKEN_HEART:
-    //         printf("BROKEN_HEART (forward to: %p)\n",
-    //                (void *)get_forward_address(current));
-    //         break;
-
-    //     default: {
-    //         TClass *template = find_class_by_type(obj->type);
-    //         if (template) {
-    //             printf("CLASS_TYPE (%ld)\n", obj->type);
-    //             RClass *cls = (RClass *)obj;
-    //             printf("  Parent: %p\n", (void *)cls->parent);
-    //             printf("  Variables:\n");
-    //             for (int i = 0; i < vector_size(template->varNames); i++) {
-    //                 char *varName = (char *)vector_get(template->varNames, i);
-    //                 printf("    %s: %p\n", varName, (void *)cls->var_slots[i]);
-    //             }
-    //         } else {
-    //             printf("UNKNOWN_TYPE (%ld)\n", obj->type);
-    //         }
-    //         break;
-    //     }
-    //     }
-
-    //     current += size;
-    // }
-
     printf("\nTotal objects: %d\n", obj_count);
     printf("Total heap usage: %ld bytes\n", heap_ptr - heap_start);
     printf("=== End of Heap Objects ===\n\n");

@@ -8,8 +8,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
-#define HEAP_SIZE (1024 * 1024 * 1024) // 1GB heap size
-
+extern size_t heap_size;
 extern intptr_t heap_start;
 extern intptr_t heap_ptr;
 extern intptr_t to_space;
