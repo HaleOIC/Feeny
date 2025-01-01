@@ -1,5 +1,0 @@
-defn main () :
-   printf("Hello ")
-   printf("World\n")
-
-main()
