@@ -6,6 +6,7 @@
 
 !/bin/.gitkeep
 
+output/
 .vscode/
 .idea/
 *.swp
