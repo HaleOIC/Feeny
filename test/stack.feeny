@@ -1,0 +1,43 @@
+; stack object
+defn stack (n) :
+   object:
+      var capacity = n
+      var stackArray = array(n, 0)
+      var size = 0
+
+      method push (v) :
+         if this.size < this.capacity :
+            this.stackArray[this.size] = v
+            this.size = this.size + 1
+         else :
+            printf("Error: stack size is larger than capacity")
+
+      method pop ():
+         if this.size > 0 :
+            this.size = this.size - 1
+            this.stackArray[this.size]
+         else :
+            printf("Error: stack is empty")
+
+      method peek ():
+         if this.size > 0:
+            this.stackArray[this.size - 1]
+         else:
+            printf("Error: stack is empty")
+
+; Test function for stack object
+defn test ():
+   var s = stack(10)
+
+   ; Push items
+   var i = 0
+   while i < 10 :
+      s.push(i * 10)
+      i = i + 1
+   
+   ;Pop items
+   while s.size > 0 :
+      printf("About to pop: ~\n", s.peek())
+      printf("Popped : ~\n", s.pop())
+
+test()

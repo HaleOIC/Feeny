@@ -1,0 +1,83 @@
+; Create a stack with a specific capacity and identifier
+; Implements basic stack operations like push, pop, and peek
+defn stack (n, id) :
+   object:
+      var capacity = n
+      var stackArray = array(n, 0)
+      var size = 0
+      var index = id
+
+      ; Add an element to the top of the stack
+      method push (v) :
+         if this.size < this.capacity :
+            this.stackArray[this.size] = v
+            this.size = this.size + 1
+         else :
+            printf("Error: stack size is larger than capacity")
+
+      ; Remove and return the top element from the stack
+      method pop ():
+         if this.size > 0 :
+            this.size = this.size - 1
+            this.stackArray[this.size]
+         else :
+            printf("Error: stack is empty")
+
+      ; Return the top element without removing it
+      method peek ():
+         if this.size > 0:
+            this.stackArray[this.size - 1]
+         else:
+            printf("Error: stack is empty")
+
+; Convert stack index to stack name (A, B, or C)
+defn selection (n):
+   if n == 1:
+      printf("A")
+   else:
+      if n == 2:
+         printf("B")
+      else:
+         printf("C")
+
+; Print the movement of a plate between stacks
+defn print (plateId, fromId, toId) :
+    printf("Move plate ~ from ", plateId)
+    selection(fromId)
+    printf(" Stack to ")
+    selection(toId)
+    printf(" Stack\n")
+
+; Recursive Towers of Hanoi algorithm implementation
+; Moves n plates from source stack to destination stack using auxiliary stack
+defn move (n, from, to, aux) :
+    if n > 0 :
+        ; Recursively move n-1 plates to auxiliary stack
+        move(n - 1, from, aux, to)
+
+        ; Move the largest plate
+        var currentPlate = from.pop()
+        to.push(currentPlate)
+        print(currentPlate, from.index, to.index)
+
+        ; Move n-1 plates from auxiliary stack to destination stack
+        move(n - 1, aux, to, from)
+
+; Main function to set up and solve the Towers of Hanoi problem
+defn main () :
+    ; Create three stacks with capacity 6
+    var stackA = stack(6, 1)
+    var stackB = stack(6, 2)
+    var stackC = stack(6, 3)
+
+    ; Initialize stackA with plates from 6 to 1
+    var i = 0
+    while i < 6 :
+        stackA.push(6 - i)
+        i = i + 1
+    
+    ; Solve Towers of Hanoi, moving all plates from A to B
+    move(6, stackA, stackB, stackC)
+
+; Start the program
+main()
