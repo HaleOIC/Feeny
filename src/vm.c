@@ -1,3 +1,8 @@
+/**
+ * Tag premitive Optimization Assumption:
+ * Machine->global only use original(untaged) address
+ * otherwise, it will introduce redundant conversion into the whole implementation
+ */
 #include "feeny/vm.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,7 +227,7 @@ void initvm(Program *program) {
 
     // Initialize garbage collector
     init_heap();
-    machine->global = newClassObj(GLOBAL_TYPE, vector_size(globalTemplate->varNames));
+    machine->global = (RClass *)UNTAG_PTR((intptr_t)newClassObj(GLOBAL_TYPE, vector_size(globalTemplate->varNames)));
 
     // Init local frame
     MethodValue *method = vector_get(program->values, program->entry);
@@ -236,10 +241,10 @@ static void handle_lit_instr(Machine *machine, LitIns *ins) {
     switch (value->tag) {
     case INT_VAL:
         IntValue *int_value = (IntValue *)value;
-        vector_add(machine->stack, newIntObj(int_value->value));
+        vector_add(machine->stack, (void *)newIntObj(int_value->value));
         break;
     case NULL_VAL:
-        vector_add(machine->stack, newNullObj());
+        vector_add(machine->stack, (void *)newNullObj());
         break;
     default:
         fprintf(stderr, "Only int or null object can be used in lit\n");
@@ -256,10 +261,10 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     }
 
     // Get arguments from stack
-    RTObj *args[MXARGS];
+    intptr_t args[MXARGS];
     for (int i = ins->arity - 1; i >= 0; i--) {
-        args[i] = vector_pop(machine->stack);
-        if (((Value *)args[i])->tag != INT_TYPE) {
+        args[i] = (intptr_t)vector_pop(machine->stack);
+        if (!IS_INT(args[i])) {
             printf("Error: printf only accepts integers\n");
             exit(1);
         }
@@ -268,8 +273,7 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
     int idx = 0;
     while (*str_format != '\0') {
         if (*str_format == '~') {
-            intptr_t value = (intptr_t)args[idx++];
-            printf("%ld", ((RInt *)value)->value);
+            printf("%ld", UNTAG_INT(args[idx++]));
         } else {
             putchar(*str_format);
         }
@@ -278,16 +282,16 @@ static void handle_print_instr(Machine *machine, PrintfIns *ins) {
 }
 
 static void handle_array_instr(Machine *machine) {
-    RTObj *init_val = vector_pop(machine->stack);
-    RTObj *length_val = vector_pop(machine->stack);
+    intptr_t init_val = (intptr_t)vector_pop(machine->stack);
+    intptr_t length_val = (intptr_t)vector_pop(machine->stack);
 
-    if (length_val->type != INT_TYPE) {
+    if (!IS_INT(length_val)) {
         fprintf(stderr, "Array length must be integer\n");
         exit(1);
     }
     // !important: add inital_value to stack in case of GC can not see it
-    vector_add(machine->stack, init_val);
-    RArray *array = newArrayObj((int)((RInt *)length_val)->value, init_val);
+    vector_add(machine->stack, (void *)init_val);
+    RArray *array = newArrayObj((int)UNTAG_INT(length_val), (void *)init_val);
     vector_pop(machine->stack);
     vector_add(machine->stack, array);
 }
@@ -305,23 +309,23 @@ static void handle_object_instr(Machine *machine, ObjectIns *ins) {
     }
 
     int slotNum = (int)(intptr_t)vector_size(classTemplate->varNames);
-    RClass *instance = newClassObj(classTemplate->type, slotNum);
+    RClass *instance = (RClass *)UNTAG_PTR((intptr_t)newClassObj(classTemplate->type, slotNum));
 
     // Pop initial values and parent
     for (int i = slotNum - 1; i >= 0; i--) {
         instance->var_slots[i] = (intptr_t)vector_pop(machine->stack);
     }
-    intptr_t fakeParent = (intptr_t)vector_pop(machine->stack);
-    if (((RTObj *)fakeParent)->type == NULL_TYPE) {
-        instance->parent = 0;
-    } else {
-        instance->parent = fakeParent;
-    }
-    vector_add(machine->stack, instance);
+    instance->parent = (intptr_t)vector_pop(machine->stack);
+    vector_add(machine->stack, (void *)TAG_PTR((intptr_t)instance));
 }
 
 static void handle_slot_instr(Machine *machine, SlotIns *ins) {
-    RTObj *receiver = vector_pop(machine->stack);
+    intptr_t target_addr = (intptr_t)vector_pop(machine->stack);
+    if (!IS_PTR(target_addr)) {
+        fprintf(stderr, "Error: Slot requires object\n");
+        exit(1);
+    }
+    RTObj *receiver = (RTObj *)UNTAG_PTR(target_addr);
     if (receiver->type < OBJECT_TYPE) {
         fprintf(stderr, "Error: Get slot requires object\n");
         exit(1);
@@ -334,14 +338,17 @@ static void handle_slot_instr(Machine *machine, SlotIns *ins) {
         fprintf(stderr, "Invalid slot access\n");
         exit(1);
     }
-
     vector_add(machine->stack, (void *)instance->var_slots[slotIndex]);
 }
 
 static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
     intptr_t value = (intptr_t)vector_pop(machine->stack);
-
-    RTObj *receiver = vector_pop(machine->stack);
+    intptr_t target_addr = (intptr_t)vector_pop(machine->stack);
+    if (!IS_PTR(target_addr)) {
+        fprintf(stderr, "Error: Set slot requires object\n");
+        exit(1);
+    }
+    RTObj *receiver = (RTObj *)UNTAG_PTR(target_addr);
     if (receiver->type < OBJECT_TYPE) {
         fprintf(stderr, "Error: Set slot requires object\n");
         exit(1);
@@ -354,87 +361,80 @@ static void handle_set_slot_instr(Machine *machine, SetSlotIns *ins) {
         fprintf(stderr, "Invalid slot access\n");
         exit(1);
     }
-
     instance->var_slots[slotIndex] = value;
 }
 
 static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
-    RTObj *args[MXARGS];
+    intptr_t args[MXARGS];
     int arg_count = ins->arity - 1;
-
     for (int i = 0; i < arg_count; i++) {
-        args[i] = vector_pop(machine->stack);
+        args[i] = (intptr_t)vector_pop(machine->stack);
     }
 
-    RTObj *receiver = vector_pop(machine->stack);
+    intptr_t target = (intptr_t)vector_pop(machine->stack);
+
     char *slotName = ((StringValue *)vector_get(machine->program->values, ins->name))->value;
 
-    if (receiver->type == INT_TYPE) {
+    // Handle integer operations
+    if (IS_INT(target)) {
         // Handle integer operations
-        RInt *operand1 = (RInt *)receiver;
+        intptr_t operand1 = target;
         if (ins->arity != 2) {
             fprintf(stderr, "Error: Int Object slot invoke must take another argument\n");
             exit(1);
         }
 
-        RTObj *other = args[0];
-        if (other->type != INT_TYPE) {
+        if (!IS_INT(args[0])) {
             fprintf(stderr, "Error: Type check error on Int Object invoke\n");
             exit(1);
         }
+        intptr_t operand2 = args[0];
 
-        RInt *operand2 = (RInt *)other;
-        RTObj *result = NULL;
-
+        intptr_t result = 0;
         // Handle different integer operations
         if (strcmp(slotName, "add") == 0) {
-            result = (RTObj *)newIntObj(operand1->value + operand2->value);
+            // f(x+y) = 8(x+y) = 8x + 8y = f(x) + f(y)
+            result = TAG_INT(UNTAG_INT(operand1) + UNTAG_INT(operand2));
         } else if (strcmp(slotName, "sub") == 0) {
-            result = (RTObj *)newIntObj(operand1->value - operand2->value);
+            // f(x-y) = 8(x-y) = 8x - 8y = f(x) - f(y)
+            result = TAG_INT(UNTAG_INT(operand1) - UNTAG_INT(operand2));
         } else if (strcmp(slotName, "mul") == 0) {
-            result = (RTObj *)newIntObj(operand1->value * operand2->value);
+            // f(x*y) = 8(x*y) = 8x * y = f(x) * y
+            result = TAG_INT(UNTAG_INT(operand1) * UNTAG_INT(operand2));
+            result = operand1 * UNTAG_INT(operand2);
         } else if (strcmp(slotName, "div") == 0) {
-            result = (RTObj *)newIntObj(operand1->value / operand2->value);
+            // f(x/y) = 8(x/y) = 8x / y = f(x) / y
+            result = TAG_INT(UNTAG_INT(operand1) / UNTAG_INT(operand2));
         } else if (strcmp(slotName, "mod") == 0) {
-            result = (RTObj *)newIntObj(operand1->value % operand2->value);
+            // f(x%y) = f(x % y)
+            result = TAG_INT(UNTAG_INT(operand1) % UNTAG_INT(operand2));
         } else if (strcmp(slotName, "lt") == 0) {
-            if (operand1->value < operand2->value) {
-                result = (RTObj *)newIntObj(0);
-            } else {
-                result = (RTObj *)newNullObj();
-            }
+            result = UNTAG_INT(operand1) < UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
         } else if (strcmp(slotName, "gt") == 0) {
-            if (operand1->value > operand2->value) {
-                result = (RTObj *)newIntObj(0);
-            } else {
-                result = (RTObj *)newNullObj();
-            }
-        } else if (strcmp(slotName, "le") == 0) {
-            if (operand1->value <= operand2->value) {
-                result = (RTObj *)newIntObj(0);
-            } else {
-                result = (RTObj *)newNullObj();
-            }
-        } else if (strcmp(slotName, "ge") == 0) {
-            if (operand1->value >= operand2->value) {
-                result = (RTObj *)newIntObj(0);
-            } else {
-                result = (RTObj *)newNullObj();
-            }
+            result = UNTAG_INT(operand1) > UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
         } else if (strcmp(slotName, "eq") == 0) {
-            if (operand1->value == operand2->value) {
-                result = (RTObj *)newIntObj(0);
-            } else {
-                result = (RTObj *)newNullObj();
-            }
+            result = UNTAG_INT(operand1) == UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+        } else if (strcmp(slotName, "le") == 0) {
+            result = UNTAG_INT(operand1) <= UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+        } else if (strcmp(slotName, "ge") == 0) {
+            result = UNTAG_INT(operand1) >= UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
         } else {
             fprintf(stderr, "Error: Unsupported Int Object operation: %s\n", slotName);
             exit(1);
         }
 
-        vector_add(machine->stack, result);
+        vector_add(machine->stack, (void *)result);
         machine->ip++;
-    } else if (receiver->type == ARRAY_TYPE) {
+        return;
+    }
+
+    // Handle array operations
+    if (!IS_PTR(target)) {
+        fprintf(stderr, "Error: Array Object slot invoke must take another argument\n");
+        exit(1);
+    }
+    RTObj *receiver = (RTObj *)UNTAG_PTR(target);
+    if (receiver->type == ARRAY_TYPE) {
         RArray *arr = (RArray *)receiver;
 
         if (strcmp(slotName, "set") == 0) {
@@ -443,28 +443,28 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
                 exit(1);
             }
 
-            RTObj *index = args[1];
-            RTObj *value = args[0];
-            if (index->type != INT_TYPE) {
+            intptr_t index = args[1];
+            if (!IS_INT(index)) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
             }
 
-            int arrayIndex = (int)((RInt *)index)->value;
-            arr->slots[arrayIndex] = (intptr_t)value;
+            int arrayIndex = UNTAG_INT(index);
+            arr->slots[arrayIndex] = args[0];
+
         } else if (strcmp(slotName, "get") == 0) {
             if (ins->arity != 2) {
                 fprintf(stderr, "Error: Array Object get operation must take one argument\n");
                 exit(1);
             }
 
-            RTObj *index = args[0];
-            if (index->type != INT_TYPE) {
+            intptr_t index = args[0];
+            if (!IS_INT(index)) {
                 fprintf(stderr, "Error: Array index must be integer\n");
                 exit(1);
             }
 
-            int arrayIndex = (int)((RInt *)index)->value;
+            int arrayIndex = UNTAG_INT(index);
             vector_add(machine->stack, (void *)arr->slots[arrayIndex]);
         } else if (strcmp(slotName, "length") == 0) {
             if (ins->arity != 1) {
@@ -472,14 +472,17 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
                 exit(1);
             }
 
-            RInt *result = newIntObj(arr->length);
-            vector_add(machine->stack, result);
+            vector_add(machine->stack, (void *)newIntObj(arr->length));
         } else {
             fprintf(stderr, "Error: Unsupported Array Object operation: %s\n", slotName);
             exit(1);
         }
         machine->ip++;
-    } else if (receiver->type >= OBJECT_TYPE) {
+        return;
+    }
+
+    // Handle object operations
+    if (receiver->type >= OBJECT_TYPE) {
         RTObj *current = receiver;
         MethodValue *method = NULL;
 
@@ -488,7 +491,15 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             if (method) {
                 break;
             }
-            current = (RTObj *)((RClass *)current)->parent;
+            intptr_t parent = ((RClass *)current)->parent;
+            if (IS_NULL(parent)) {
+                break;
+            }
+            if (!IS_PTR(parent)) {
+                fprintf(stderr, "Error: Invalid parent pointer\n");
+                exit(1);
+            }
+            current = (RTObj *)UNTAG_PTR(parent);
         }
         if (!method || method->tag != METHOD_VAL) {
             fprintf(stderr, "Error: Undefined function: %s\n", slotName);
@@ -502,10 +513,10 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
 
         // Create new frame with receiver as parent
         make_frame(machine, method);
-        machine->cur->locals[0] = (intptr_t)receiver;
+        machine->cur->locals[0] = target;
 
         for (int i = 0; i < ins->arity - 1; i++) {
-            machine->cur->locals[ins->arity - i - 1] = (intptr_t)args[i];
+            machine->cur->locals[ins->arity - i - 1] = args[i];
         }
     } else {
         fprintf(stderr, "Error: Cannot invoke any operation on Null Object\n");
@@ -561,8 +572,7 @@ static void handle_set_global_instr(Machine *machine, SetGlobalIns *ins) {
         exit(1);
     }
     int slotIndex = findSlotIndex(machine, GLOBAL_TYPE, global->value);
-    RTObj *top = vector_pop(machine->stack);
-    machine->global->var_slots[slotIndex] = (intptr_t)top;
+    machine->global->var_slots[slotIndex] = (intptr_t)vector_pop(machine->stack);
 }
 
 static void handle_goto_instr(Machine *machine, GotoIns *ins) {
@@ -570,9 +580,9 @@ static void handle_goto_instr(Machine *machine, GotoIns *ins) {
 }
 
 static void handle_branch_instr(Machine *machine, BranchIns *ins) {
-    RTObj *condition = vector_pop(machine->stack);
+    intptr_t condition = (intptr_t)vector_pop(machine->stack);
 
-    if (condition->type != NULL_TYPE) {
+    if (!IS_NULL(condition)) {
         machine->ip = (int)(intptr_t)ins->name;
     } else {
         machine->ip++;
@@ -598,7 +608,6 @@ void runvm() {
 #ifdef EXEC_DEBUG
         printf("cur ip: %ld\n", machine->ip);
 #endif
-
         // When encounter the end of current frame, break the loop
         if (machine->ip == -1 && machine->cur == NULL) {
             break;
@@ -614,7 +623,6 @@ void runvm() {
         print_ins(instr);
         printf("\n");
 #endif
-
         switch (instr->tag) {
         case LABEL_OP:
             break;

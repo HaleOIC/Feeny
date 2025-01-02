@@ -14,19 +14,25 @@ void print_caller() {
     free(strs);
 }
 
-RInt *newIntObj(int value) {
-    RInt *rv = (RInt *)halloc(sizeof(RInt));
-    rv->type = INT_TYPE;
-    rv->value = value;
-    return rv;
+// RInt *newIntObj(int value) {
+//     RInt *rv = (RInt *)halloc(sizeof(RInt));
+//     rv->type = INT_TYPE;
+//     rv->value = value;
+//     return rv;
+// }
+RInt newIntObj(int value) {
+    return (intptr_t)TAG_INT(value);
 }
 
-RNull *newNullObj() {
-    // print_caller();
-    RNull *rv = (RNull *)halloc(sizeof(RNull));
-    rv->type = NULL_TYPE;
-    rv->space = 0;
-    return rv;
+// RNull *newNullObj() {
+//     // print_caller();
+//     RNull *rv = (RNull *)halloc(sizeof(RNull));
+//     rv->type = NULL_TYPE;
+//     rv->space = 0;
+//     return rv;
+// }
+RNull newNullObj() {
+    return (intptr_t)(NULL_TAG);
 }
 
 RArray *newArrayObj(int length, RTObj *initValue) {
@@ -34,23 +40,29 @@ RArray *newArrayObj(int length, RTObj *initValue) {
     rv->type = ARRAY_TYPE;
     rv->length = length;
     for (int i = 0; i < length; i++) {
-        if (!is_forward((intptr_t)initValue)) {
-            rv->slots[i] = (intptr_t)initValue;
+        if (IS_PTR((intptr_t)initValue)) {
+            if (!is_forward((intptr_t)initValue)) {
+                rv->slots[i] = (intptr_t)initValue;
+            } else {
+                rv->slots[i] = (intptr_t)get_forward_address(UNTAG_PTR((intptr_t)initValue));
+            }
         } else {
-            rv->slots[i] = (intptr_t)get_forward_address((intptr_t)initValue);
+            rv->slots[i] = (intptr_t)initValue;
         }
     }
-    return rv;
+    return (void *)TAG_PTR((intptr_t)rv);
+    // return rv;
 }
 
 RClass *newClassObj(ObjType type, int slotNum) {
     RClass *rv = (RClass *)halloc(sizeof(RClass) + slotNum * sizeof(intptr_t));
     rv->type = type;
-    rv->parent = (intptr_t)NULL;
+    rv->parent = NULL_TAG;
     for (int i = 0; i < slotNum; i++) {
         rv->var_slots[i] = 0;
     }
-    return rv;
+    return (void *)TAG_PTR((intptr_t)rv);
+    // return rv;
 }
 
 TClass *newTemplateClass(ObjType type, int index) {

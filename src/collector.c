@@ -1,10 +1,10 @@
 #include "feeny/collector.h"
 #include <sys/resource.h>
 
-// #define MEMORY_DEBUG 0
+// #define MEMORY_DEBUG 1
 
 // heap_size = 1MB
-size_t heap_size = 1024;
+size_t heap_size = 1024 * 1024;
 
 // Core variables for garbage collector
 intptr_t heap_start = 0;
@@ -52,9 +52,9 @@ TClass *find_class_by_type(ObjType type) {
 static size_t get_object_size(intptr_t obj) {
     switch (((RTObj *)obj)->type) {
     case INT_TYPE:
-        return sizeof(RInt);
+        return 0;
     case NULL_TYPE:
-        return sizeof(RNull);
+        return 0;
     case ARRAY_TYPE:
         return sizeof(RArray) + ((RArray *)obj)->length * sizeof(intptr_t);
     case BROKEN_HEART:
@@ -77,6 +77,12 @@ static intptr_t copy_object(intptr_t obj) {
     if (!obj || !is_heap_ptr(obj))
         return obj;
 
+    if (IS_INT(obj) || IS_NULL(obj)) {
+        return obj;
+    }
+
+    obj = UNTAG_PTR(obj);
+
     // Check if already forwarded
     if (is_forward(obj)) {
         return get_forward_address(obj);
@@ -92,7 +98,7 @@ static intptr_t copy_object(intptr_t obj) {
     // Set forwarding address
     set_forward_address(obj, new_location);
 
-    return new_location;
+    return TAG_PTR(new_location);
 }
 
 // Scan an object's pointers
@@ -146,7 +152,7 @@ static void scan_root_set() {
         for (int i = 0; i < vector_size(globalTemplate->varNames); i++) {
             machine->global->var_slots[i] = copy_object(machine->global->var_slots[i]);
         }
-        machine->global = (RClass *)copy_object((intptr_t)machine->global);
+        machine->global = (RClass *)UNTAG_PTR((intptr_t)copy_object(TAG_PTR((intptr_t)machine->global)));
     }
 
     // Scan frames
@@ -262,11 +268,9 @@ int garbage_collector() {
     scan_root_set();
 
     intptr_t scan = to_space;
-    int objects_scanned = 0;
     while (scan < to_ptr) {
         scan_object(scan);
         scan += get_object_size(scan);
-        objects_scanned++;
     }
 
     intptr_t temp = heap_start;
@@ -353,10 +357,15 @@ void print_heap_objects() {
     intptr_t total_stack_size = 0;
     intptr_t total_null = 0;
     for (int i = 0; i < vector_size(machine->stack); i++) {
-        if (((RTObj *)vector_get(machine->stack, i))->type == NULL_TYPE) {
+        intptr_t obj = (intptr_t)vector_get(machine->stack, i);
+        if (IS_NULL(obj)) {
             total_null++;
+            continue;
         }
-        total_stack_size += get_object_size((intptr_t)vector_get(machine->stack, i));
+        if (IS_INT(obj)) {
+            continue;
+        }
+        total_stack_size += get_object_size(obj);
     }
     printf("Total stack usage: %ld bytes\n", total_stack_size);
     printf("Total null objects: %ld\n", total_null);

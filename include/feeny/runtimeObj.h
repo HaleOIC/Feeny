@@ -11,17 +11,17 @@ struct RTObj {
     ObjType type;
 };
 
-// RInt -> Runtime Int Object
-struct RInt {
-    ObjType type;
-    intptr_t value;
-};
+// // RInt -> Runtime Int Object
+// struct RInt {
+//     ObjType type;
+//     intptr_t value;
+// };
 
-// RNull -> Runtime Null Object
-struct RNull {
-    ObjType type;
-    intptr_t space;
-};
+// // RNull -> Runtime Null Object
+// struct RNull {
+//     ObjType type;
+//     intptr_t space;
+// };
 
 // RArray -> Runtime Array Object
 struct RArray {
@@ -45,8 +45,8 @@ struct TClass {
     Map *funcNameToPoolIndex;
 };
 
-RInt *newIntObj(int);
-RNull *newNullObj();
+RInt newIntObj(int);
+RNull newNullObj();
 RArray *newArrayObj(int, RTObj *);
 RClass *newClassObj(ObjType, int);
 TClass *newTemplateClass(ObjType, int);
