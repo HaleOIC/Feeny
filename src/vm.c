@@ -394,13 +394,12 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
         // Handle different integer operations
         if (strcmp(slotName, "add") == 0) {
             // f(x+y) = 8(x+y) = 8x + 8y = f(x) + f(y)
-            result = TAG_INT(UNTAG_INT(operand1) + UNTAG_INT(operand2));
+            result = operand1 + operand2;
         } else if (strcmp(slotName, "sub") == 0) {
             // f(x-y) = 8(x-y) = 8x - 8y = f(x) - f(y)
-            result = TAG_INT(UNTAG_INT(operand1) - UNTAG_INT(operand2));
+            result = operand1 - operand2;
         } else if (strcmp(slotName, "mul") == 0) {
             // f(x*y) = 8(x*y) = 8x * y = f(x) * y
-            result = TAG_INT(UNTAG_INT(operand1) * UNTAG_INT(operand2));
             result = operand1 * UNTAG_INT(operand2);
         } else if (strcmp(slotName, "div") == 0) {
             // f(x/y) = 8(x/y) = 8x / y = f(x) / y
@@ -409,15 +408,16 @@ static void handle_call_slot_instr(Machine *machine, CallSlotIns *ins) {
             // f(x%y) = f(x % y)
             result = TAG_INT(UNTAG_INT(operand1) % UNTAG_INT(operand2));
         } else if (strcmp(slotName, "lt") == 0) {
-            result = UNTAG_INT(operand1) < UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            // result = UNTAG_INT(operand1) < UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            result = ((operand1 < operand2 ? 1 : 0) ^ 1) << 1;
         } else if (strcmp(slotName, "gt") == 0) {
-            result = UNTAG_INT(operand1) > UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            result = ((operand1 > operand2 ? 1 : 0) ^ 1) << 1;
         } else if (strcmp(slotName, "eq") == 0) {
-            result = UNTAG_INT(operand1) == UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            result = ((operand1 == operand2 ? 1 : 0) ^ 1) << 1;
         } else if (strcmp(slotName, "le") == 0) {
-            result = UNTAG_INT(operand1) <= UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            result = ((operand1 <= operand2 ? 1 : 0) ^ 1) << 1;
         } else if (strcmp(slotName, "ge") == 0) {
-            result = UNTAG_INT(operand1) >= UNTAG_INT(operand2) ? newIntObj(0) : newNullObj();
+            result = ((operand1 >= operand2 ? 1 : 0) ^ 1) << 1;
         } else {
             fprintf(stderr, "Error: Unsupported Int Object operation: %s\n", slotName);
             exit(1);
