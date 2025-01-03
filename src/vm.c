@@ -139,7 +139,7 @@ static void make_frame(Machine *machine, MethodValue *method) {
     for (int i = 0; i < vector_size(method->code); i++) {
         ByteIns *instr = vector_get(method->code, i);
         switch (instr->tag) {
-        case BRANCH_OP:
+        case BRANCH_OP: {
             BranchIns *branchInstr = (BranchIns *)instr;
             Value *branchLabelStr = vector_get(machine->program->values, branchInstr->name);
             if (branchLabelStr->tag != STRING_VAL) {
@@ -149,8 +149,9 @@ static void make_frame(Machine *machine, MethodValue *method) {
             StringValue *branchLabelName = (StringValue *)branchLabelStr;
             branchInstr->name = (int)(intptr_t)findByName(labels, branchLabelName->value);
             break;
+        }
 
-        case GOTO_OP:
+        case GOTO_OP: {
             GotoIns *gotoInstr = (GotoIns *)instr;
             Value *gotoLabelStr = vector_get(machine->program->values, gotoInstr->name);
             if (gotoLabelStr->tag != STRING_VAL) {
@@ -160,6 +161,8 @@ static void make_frame(Machine *machine, MethodValue *method) {
             StringValue *gotoLabelName = (StringValue *)gotoLabelStr;
             gotoInstr->name = (int)(intptr_t)findByName(labels, gotoLabelName->value);
             break;
+        }
+
         default:
             break;
         }
@@ -172,7 +175,7 @@ static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
     for (int i = 0; i < vector_size(slots); i++) {
         Value *v = (Value *)(vector_get(pool, (int)(intptr_t)vector_get(slots, i)));
         switch (v->tag) {
-        case SLOT_VAL:
+        case SLOT_VAL: {
             SlotValue *slotValue = (SlotValue *)v;
             StringValue *slotName = (StringValue *)vector_get(pool, slotValue->name);
             if (slotName->tag != STRING_VAL) {
@@ -181,7 +184,9 @@ static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
             }
             vector_add(template->varNames, slotName->value);
             break;
-        case METHOD_VAL:
+        }
+
+        case METHOD_VAL: {
             MethodValue *methodValue = (MethodValue *)v;
             StringValue *methodName = (StringValue *)vector_get(pool, methodValue->name);
             if (methodName->tag != STRING_VAL) {
@@ -190,6 +195,8 @@ static void addSlotInfo(Vector *pool, TClass *template, Vector *slots) {
             }
             addNewTuple(template->funcNameToPoolIndex, methodName->value, (void *)(intptr_t)vector_get(slots, i));
             break;
+        }
+
         default:
             fprintf(stderr, "Error: Unknown class value's slot type!\n");
             exit(1);
@@ -239,10 +246,12 @@ void initvm(Program *program) {
 static void handle_lit_instr(Machine *machine, LitIns *ins) {
     Value *value = vector_get(machine->program->values, ins->idx);
     switch (value->tag) {
-    case INT_VAL:
+    case INT_VAL: {
         IntValue *int_value = (IntValue *)value;
         vector_add(machine->stack, (void *)newIntObj(int_value->value));
         break;
+    }
+
     case NULL_VAL:
         vector_add(machine->stack, (void *)newNullObj());
         break;

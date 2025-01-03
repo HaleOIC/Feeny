@@ -1,5 +1,10 @@
 #include "feeny/collector.h"
+#include <sys/mman.h>
 #include <sys/resource.h>
+
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS 0x20
+#endif
 
 // #define MEMORY_DEBUG 1
 
@@ -60,7 +65,7 @@ static size_t get_object_size(intptr_t obj) {
     case BROKEN_HEART:
         fprintf(stderr, "Error: Broken heart object can not be calculated\n");
         exit(1);
-    default:
+    default: {
         // General case, lookup method's class template and calculate size
         TClass *template = find_class_by_type(((RTObj *)obj)->type);
         if (!template) {
@@ -69,6 +74,7 @@ static size_t get_object_size(intptr_t obj) {
             exit(1);
         }
         return sizeof(RClass) + vector_size(template->varNames) * sizeof(intptr_t);
+    }
     }
 }
 

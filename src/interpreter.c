@@ -261,7 +261,7 @@ static void copy_parent_entries(EnvObj *obj, Obj *parent) {
 static void eval_slot(EnvObj *env, SlotStmt *stmt) {
     switch (stmt->tag) {
 
-    case VAR_STMT:
+    case VAR_STMT: {
         SlotVar *s = (SlotVar *)stmt;
 
         VarEntry *entry = (VarEntry *)malloc(sizeof(VarEntry));
@@ -270,8 +270,9 @@ static void eval_slot(EnvObj *env, SlotStmt *stmt) {
 
         add_entry(env, s->name, (Entry *)entry);
         break;
+    }
 
-    case FN_STMT:
+    case FN_STMT: {
         SlotMethod *fn = (SlotMethod *)stmt;
 
         // Create a new entry point
@@ -286,6 +287,7 @@ static void eval_slot(EnvObj *env, SlotStmt *stmt) {
         // Add into the environment
         add_entry(env, fn->name, (Entry *)codeEntry);
         break;
+    }
 
     default:
         printf("Error: Unknown slot statement type\n");
@@ -488,7 +490,7 @@ Obj *eval_exp(EnvObj *env, Exp *exp) {
                 exit(1);
             }
 
-        case ARRAY_OBJ:
+        case ARRAY_OBJ: {
             ArrayObj *arr = (ArrayObj *)receiver;
             if (strcmp(e->name, "set") == 0) {
                 if (e->nargs != 2) {
@@ -530,8 +532,9 @@ Obj *eval_exp(EnvObj *env, Exp *exp) {
                 printf("Error: Unsupported Array Object operation: %s\n", e->name);
                 exit(1);
             }
+        }
 
-        case ENV_OBJ:
+        case ENV_OBJ: {
             Entry *entry = lookup_entry((EnvObj *)receiver, e->name);
             if (!entry || entry->tag != CODE_ENTRY) {
                 printf("Undefined function: %s\n", e->name);
@@ -562,6 +565,8 @@ Obj *eval_exp(EnvObj *env, Exp *exp) {
 
             // execute the statement
             return exec_stmt(func_env, code->body);
+        }
+
         default:
             printf("Error: Cannot invoke any operation on Null Object\n");
             exit(1);
