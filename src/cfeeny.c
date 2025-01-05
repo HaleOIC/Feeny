@@ -2,6 +2,7 @@
 #include "feeny/bytecode.h"
 #include "feeny/compiler.h"
 #include "feeny/interpreter.h"
+#include "feeny/parser.h"
 #include "feeny/utils.h"
 #include "feeny/vm.h"
 #include <getopt.h>
@@ -74,49 +75,48 @@ int main(int argc, char **argv) {
         printf("Input file: %s\n", filename);
     }
 
-    switch (mode) {
-    case MODE_AST: {
-        if (verbose)
-            printf("Reading AST from file...\n");
-        ScopeStmt *stmt = read_ast(filename);
-        if (stmt == NULL) {
-            fprintf(stderr, "Error: Failed to read AST from file: %s\n", filename);
-            return 1;
-        }
-        if (verbose)
-            printf("Interpreting AST...\n");
-        interpret(stmt);
-        break;
+    Parser *parser = init_parser(filename);
+    if (parser == NULL) {
+        fprintf(stderr, "Error: Failed to initialize parser\n");
+        return 1;
     }
-
-    case MODE_FULL: {
-        if (verbose) {
-            printf("Loading ast from file...\n");
-        }
-        ScopeStmt *stmt = read_ast(filename);
-        if (stmt == NULL) {
-            fprintf(stderr, "Error: Failed to read AST from file: %s\n", filename);
-            return 1;
-        }
-        Program *program = compile(stmt);
-        if (verbose)
-            printf("Initializing VM...\n");
-
-        // print_prog(program);
-
-        // Allocate new machine and link the program to it
-        Machine *machine = (Machine *)malloc(sizeof(Machine));
-        initvm(program);
-
-        if (verbose)
-            printf("Running VM...\n");
-
-        // Actually run the vm to get output
-        runvm();
-
-        break;
+    ScopeStmt *stmt = parse(parser);
+    if (stmt == NULL) {
+        fprintf(stderr, "Error: Failed to parse input file\n");
+        return 1;
     }
-    }
+    printf("\n\n\n");
+
+    print_scopestmt(stmt);
+
+    // switch (mode) {
+    // case MODE_AST: {
+    //     if (verbose)
+    //         printf("Interpreting AST...\n");
+    //     interpret(stmt);
+    //     break;
+    // }
+
+    // case MODE_FULL: {
+    //     Program *program = compile(stmt);
+    //     if (verbose)
+    //         printf("Initializing VM...\n");
+
+    //     // print_prog(program);
+
+    //     // Allocate new machine and link the program to it
+    //     Machine *machine = (Machine *)malloc(sizeof(Machine));
+    //     initvm(program);
+
+    //     if (verbose)
+    //         printf("Running VM...\n");
+
+    //     // Actually run the vm to get output
+    //     runvm();
+
+    //     break;
+    // }
+    // }
 
     return 0;
 }

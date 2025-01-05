@@ -5,16 +5,6 @@
 
 static int label_counter = 0;
 
-#ifndef strdup
-char *strdup(const char *s) {
-    size_t len = strlen(s) + 1;
-    char *new = malloc(len);
-    if (new == NULL)
-        return NULL;
-    return (char *)memcpy(new, s, len);
-}
-#endif
-
 static char *genLabel() {
     char buffer[32];
     snprintf(buffer, sizeof(buffer), "L%d", label_counter++);

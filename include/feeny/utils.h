@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef strdup
+char *strdup(const char *s);
+#endif
+
 int max(int a, int b);
 int min(int a, int b);
 void print_string(char *str);

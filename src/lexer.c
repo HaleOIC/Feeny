@@ -95,10 +95,8 @@ static void skip_whitespace(Lexer *lexer) {
         case ' ':
         case '\r':
         case '\t':
-        case ',': // Treat comma as whitespace
             advance(lexer);
             break;
-
         case ';': // Comment
             while (peek(lexer) != '\n' && !is_at_end(lexer))
                 advance(lexer);
@@ -166,9 +164,12 @@ static Token *scan_identifier(Lexer *lexer) {
     while (isalnum(peek(lexer)) || peek(lexer) == '_' || peek(lexer) == '-') {
         advance(lexer);
     }
+    int length = (int)(lexer->current - lexer->source);
 
     // Check if it's a keyword
     for (int i = 0; keywords[i].keyword != NULL; i++) {
+        if (strlen(keywords[i].keyword) != length)
+            continue;
         if (strncmp(lexer->source, keywords[i].keyword,
                     lexer->current - lexer->source) == 0) {
             return make_token(lexer, keywords[i].type);
@@ -199,6 +200,7 @@ static Token *scan_string(Lexer *lexer) {
     }
 
     // The closing quote
+    printf("XXX %c XXX\n", peek(lexer));
     advance(lexer);
     return make_token(lexer, TOKEN_STRING);
 }
@@ -246,6 +248,8 @@ Token *get_token(Lexer *lexer) {
 
     // Other tokens
     switch (c) {
+    case ',':
+        return make_token(lexer, TOKEN_COMMA);
     case '(':
         return make_token(lexer, TOKEN_LPAREN);
     case ')':
@@ -394,10 +398,8 @@ void print_token(Token *token) {
         return;
     }
 
-    printf("Token {\n");
-    printf("  type: %s\n", token_type_to_string(token->type));
-    printf("  lexeme: '%s'\n", token->lexeme ? token->lexeme : "NULL");
-    printf("  line: %d\n", token->line);
-    printf("  column: %d\n", token->column);
-    printf("}\n");
+    printf("Token {");
+    printf("  type: %s", token_type_to_string(token->type));
+    printf("  lexeme: '%s'", token->lexeme ? token->lexeme : "NULL");
+    printf("}");
 }

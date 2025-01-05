@@ -159,6 +159,28 @@ typedef struct {
     Exp *exp;
 } ScopeExp;
 
+Exp *make_IntExp(int value);
+Exp *make_NullExp(void);
+Exp *make_PrintfExp(char *format, int nexps, Exp **exps);
+Exp *make_ArrayExp(Exp *length, Exp *init);
+Exp *make_ObjectExp(Exp *parent, int nslots, SlotStmt **slots);
+Exp *make_SlotExp(char *name, Exp *exp);
+Exp *make_SetSlotExp(char *name, Exp *exp, Exp *value);
+Exp *make_CallSlotExp(char *name, Exp *exp, int nargs, Exp **args);
+Exp *make_CallExp(char *name, int nargs, Exp **args);
+Exp *make_SetExp(char *name, Exp *exp);
+Exp *make_IfExp(Exp *pred, ScopeStmt *conseq, ScopeStmt *alt);
+Exp *make_WhileExp(Exp *pred, ScopeStmt *body);
+Exp *make_RefExp(char *name);
+
+SlotStmt *make_SlotVar(char *name, Exp *exp);
+SlotStmt *make_SlotMethod(char *name, int nargs, char **args, ScopeStmt *body);
+
+ScopeStmt *make_ScopeVar(char *name, Exp *exp);
+ScopeStmt *make_ScopeFn(char *name, int nargs, char **args, ScopeStmt *body);
+ScopeStmt *make_ScopeSeq(ScopeStmt *a, ScopeStmt *b);
+ScopeStmt *make_ScopeExp(Exp *exp);
+
 void print_exp(Exp *e);
 void print_slotstmt(SlotStmt *s);
 void print_scopestmt(ScopeStmt *s);
