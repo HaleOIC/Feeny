@@ -1,16 +1,16 @@
-defn three () :
-   3
-   
-defn hello (i) :
-   printf("Hello ~ ", i)
-   
-defn world (j, k) :
-   printf("World ~ ~\n", j, k)
+defn three():
+    3
 
-defn main () :
-   var i = three()
-   hello(i)
-   i = 10
-   world(4, i)
+defn hello(i):
+    printf("Hello ~ ", i)
+
+defn world(j, k):
+    printf("World ~ ~\n", j, k)
+
+defn main():
+    var i = three()
+    hello(i)
+    i = 10
+    world(4, i)
 
 main()

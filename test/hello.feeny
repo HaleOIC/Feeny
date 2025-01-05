@@ -1,4 +1,4 @@
-defn main () :
-   printf("Hello World\n")
+defn main():
+    printf("Hello World\n")
 
 main()

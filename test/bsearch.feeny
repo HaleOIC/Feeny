@@ -1,16 +1,22 @@
-defn bshelper (xs, i, n, v) :
-   if n == 1 :
-      if xs[i] == v : i
-      else : -1
-   else :
-      var n1 = n / 2
-      var a = xs[i + n1 - 1]
-      if a < v : bshelper(xs, i + n1, n - n1, v)
-      else : bshelper(xs, i, n1, v)
+defn bshelper(xs, i, n, v):
+    if n == 1:
+        if xs[i] == v:
+            i
+        else:
+            -1
+    else:
+        var n1 = n / 2  
+        var a = xs[i + n1 - 1]
+        if a < v: 
+            bshelper(xs, i + n1, n - n1, v)
+        else: 
+            bshelper(xs, i, n1, v)
 
-defn bs (xs, v) :
-   if xs.length() == 0 : -1
-   else : bshelper(xs, 0, xs.length(), v)
+defn bs(xs, v):
+    if xs.length() == 0:
+        -1
+    else:
+        bshelper(xs, 0, xs.length(), v)
 
 
 var a = array(10, 0)
@@ -25,8 +31,8 @@ a[7] = 24
 a[8] = 29
 a[9] = 35
 
-defn find (v) :
-   printf("The index of ~ in a is ~.\n", v, bs(a, v))
+defn find(v):
+    printf("The index of ~ in a is ~.\n", v, bs(a, v))
 
 find(13)
 find(14)

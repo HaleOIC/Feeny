@@ -1,18 +1,18 @@
-defn base () :
-   object :
-      method do-op (x, y) :
-         printf("Do a binary operation on ~ and ~.\n", x, y)
-         printf("Result = ~.\n", this.op(x, y))
+defn base():
+    object:
+        method do-op (x, y) :
+            printf("Do a binary operation on ~ and ~.\n", x, y)
+            printf("Result = ~.\n", this.op(x, y))
 
-defn adder () :
-   object(base()) :
-      method op (x, y) :
-         x + y
+defn adder():
+    object(base()):
+        method op (x, y):
+            x + y
 
-defn multiplier () :
-   object(base()) :
-      method op (x, y) :
-         x * y
+defn multiplier():
+    object(base()):
+        method op (x, y):
+            x * y
 
 var a = adder()
 var m = multiplier()

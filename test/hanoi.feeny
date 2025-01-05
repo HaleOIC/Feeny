@@ -1,26 +1,26 @@
 ; According to number, print out stack name
-defn selection (n):
-   if n == 1:
-      printf("A")
-   else:
-      if n == 2:
-         printf("B")
-      else:
-         printf("C")
+defn selection(n):
+    if n == 1:
+        printf("A")
+    else:
+        if n == 2:
+            printf("B")
+        else:
+            printf("C")
 
 ; Format moving message
-defn print (from, to) :
-   printf("Moving plate from ")
-   selection(from)
-   printf(" Stack to ")
-   selection(to)
-   printf(" Stack\n")
+defn print(from, to):
+    printf("Moving plate from ")
+    selection(from)
+    printf(" Stack to ")
+    selection(to)
+    printf(" Stack\n")
 
 ; Core function
-defn hanoi (n, from, to, aux):
-   if n > 0 :
-      hanoi(n - 1, from, aux, to)
-      print(from, to)
-      hanoi(n - 1, aux, to, from)
+defn hanoi(n, from, to, aux):
+    if n > 0 :
+        hanoi(n - 1, from, aux, to)
+        print(from, to)
+        hanoi(n - 1, aux, to, from)
 
 hanoi(6, 1, 2, 3)
