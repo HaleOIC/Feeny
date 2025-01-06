@@ -14,7 +14,6 @@ static struct {
     {"printf", TOKEN_PRINTF},
     {"array", TOKEN_ARRAY},
     {"null", TOKEN_NULL},
-    {"this", TOKEN_THIS},
     {NULL, TOKEN_ERROR} // Sentinel
 };
 
@@ -118,6 +117,9 @@ static int calc_indent_level(Lexer *lexer) {
             indent += 4; // Tab = 4 spaces
         advance(lexer);
     }
+    if (peek(lexer) == '\n') {
+        return -1;
+    }
     if (indent % 4 != 0) {
         fprintf(stderr, "Error at line %d: Indentation must be a multiple of 4 spaces\n",
                 lexer->line);
@@ -128,11 +130,17 @@ static int calc_indent_level(Lexer *lexer) {
 
 // Handle indentation
 static Token *handle_indent(Lexer *lexer, int indent_level) {
+    if (indent_level % 4 != 0) {
+        fprintf(stderr, "Error at line %d: Indentation must be a multiple of 4 spaces\n",
+                lexer->line);
+        exit(1);
+    }
+
     int current_indent = lexer->indent_stack[lexer->indent_top];
 
     if (indent_level > current_indent) {
-        if (indent_level > current_indent + 4) {
-            fprintf(stderr, "Error at line %d: Indentation must be 4 spaces greater than the previous level\n",
+        if (indent_level != current_indent + 4) {
+            fprintf(stderr, "Error at line %d: Indentation must be exactly 4 spaces greater than the previous level\n",
                     lexer->line);
             exit(1);
         }
@@ -146,13 +154,20 @@ static Token *handle_indent(Lexer *lexer, int indent_level) {
         lexer->indent_stack[lexer->indent_top] = indent_level;
         return make_token(lexer, TOKEN_INDENT);
     } else if (indent_level < current_indent) {
-
         // DEDENT
+        lexer->decent_count = (current_indent - indent_level) / 4;
+
         while (lexer->indent_top > 0 &&
                lexer->indent_stack[lexer->indent_top] > indent_level) {
             lexer->indent_top--;
         }
-        lexer->decent_count = (current_indent - indent_level) / 4 - 1;
+
+        if (lexer->indent_stack[lexer->indent_top] != indent_level) {
+            fprintf(stderr, "Error at line %d: Invalid dedentation level\n",
+                    lexer->line);
+            exit(1);
+        }
+        lexer->decent_count--;
         return make_token(lexer, TOKEN_DEDENT);
     }
 
@@ -200,7 +215,6 @@ static Token *scan_string(Lexer *lexer) {
     }
 
     // The closing quote
-    printf("XXX %c XXX\n", peek(lexer));
     advance(lexer);
     return make_token(lexer, TOKEN_STRING);
 }
@@ -229,6 +243,11 @@ Token *get_token(Lexer *lexer) {
 
         // Calculate indentation of next line
         int indent_level = calc_indent_level(lexer);
+        if (indent_level == -1) {
+            // Empty line
+            return get_token(lexer);
+        }
+
         Token *indent_token = handle_indent(lexer, indent_level);
         if (indent_token != NULL) {
             return indent_token;
@@ -335,8 +354,6 @@ const char *token_type_to_string(TokenType type) {
         return "ARRAY";
     case TOKEN_NULL:
         return "NULL";
-    case TOKEN_THIS:
-        return "THIS";
     case TOKEN_INTEGER:
         return "INTEGER";
     case TOKEN_IDENTIFIER:

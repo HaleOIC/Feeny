@@ -19,7 +19,6 @@ typedef enum {
     TOKEN_PRINTF,
     TOKEN_ARRAY,
     TOKEN_NULL,
-    TOKEN_THIS,
 
     // Literals
     TOKEN_INTEGER,
