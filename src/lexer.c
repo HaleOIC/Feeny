@@ -1,5 +1,7 @@
 #include "feeny/lexer.h"
 
+static int need_indent = 0;
+
 static struct {
     const char *keyword;
     TokenType type;
@@ -78,11 +80,42 @@ static Token *make_token(Lexer *lexer, TokenType type) {
 
     // Calculate lexeme length
     int length = (int)(lexer->current - lexer->source);
-    token->lexeme = (char *)malloc(length + 1);
-    strncpy(token->lexeme, lexer->source, length);
-    token->lexeme[length] = '\0';
+    if (type == TOKEN_STRING) {
+        // For strings, we need to process escape sequences
+        // Allocate max possible size (same as source length)
+        char *processed = (char *)malloc(length + 1);
+        int write_pos = 0;
+        
+        // Skip the opening quote
+        int read_pos = 0;
+        while (read_pos < length) { // -1 to skip closing quote
+            if (lexer->source[read_pos] == '\\') {
+                read_pos++; // Skip backslash
+                switch (lexer->source[read_pos]) {
+                    case 'n': processed[write_pos++] = '\n'; break;
+                    case 't': processed[write_pos++] = '\t'; break;
+                    case 'r': processed[write_pos++] = '\r'; break;
+                    case '\\': processed[write_pos++] = '\\'; break;
+                    case '"': processed[write_pos++] = '"'; break;
+                    default: 
+                        // Should not reach here as scan_string already validates
+                        processed[write_pos++] = lexer->source[read_pos];
+                }
+            } else {
+                processed[write_pos++] = lexer->source[read_pos];
+            }
+            read_pos++;
+        }
+        processed[write_pos] = '\0';
+        token->lexeme = processed;
+    } else {
+        // For other tokens, copy as is
+        token->lexeme = (char *)malloc(length + 1);
+        strncpy(token->lexeme, lexer->source, length);
+        token->lexeme[length] = '\0';
+    }
+    
     token->column = lexer->column - length;
-
     return token;
 }
 
@@ -138,12 +171,13 @@ static Token *handle_indent(Lexer *lexer, int indent_level) {
 
     int current_indent = lexer->indent_stack[lexer->indent_top];
 
-    if (indent_level > current_indent) {
+    if (indent_level > current_indent && need_indent) {
         if (indent_level != current_indent + 4) {
             fprintf(stderr, "Error at line %d: Indentation must be exactly 4 spaces greater than the previous level\n",
                     lexer->line);
             exit(1);
         }
+        need_indent = 0;
         // INDENT
         lexer->indent_top++;
         if (lexer->indent_top >= lexer->indent_capacity) {
@@ -176,7 +210,7 @@ static Token *handle_indent(Lexer *lexer, int indent_level) {
 
 // Scan identifier
 static Token *scan_identifier(Lexer *lexer) {
-    while (isalnum(peek(lexer)) || peek(lexer) == '_' || peek(lexer) == '-') {
+    while (isalnum(peek(lexer)) || peek(lexer) == '_' || peek(lexer) == '-' || peek(lexer) == '?') {
         advance(lexer);
     }
     int length = (int)(lexer->current - lexer->source);
@@ -204,9 +238,32 @@ static Token *scan_number(Lexer *lexer) {
 // Scan string
 static Token *scan_string(Lexer *lexer) {
     while (peek(lexer) != '"' && !is_at_end(lexer)) {
-        if (peek(lexer) == '\n')
+        if (peek(lexer) == '\\') {
+            // Handle escape sequences
+            advance(lexer); // Consume '\'
+            if (!is_at_end(lexer)) {
+                switch (peek(lexer)) {
+                case 'n':  // newline
+                case 't':  // tab
+                case 'r':  // carriage return
+                case '\\': // backslash
+                case '"':  // quote
+                    advance(lexer);
+                    break;
+                default:
+                    // Invalid escape sequence
+                    return make_token(lexer, TOKEN_ERROR);
+                }
+            } else {
+                // String ends with single backslash
+                return make_token(lexer, TOKEN_ERROR);
+            }
+        } else if (peek(lexer) == '\n') {
             lexer->line++;
-        advance(lexer);
+            advance(lexer);
+        } else {
+            advance(lexer);
+        }
     }
 
     if (is_at_end(lexer)) {
@@ -231,8 +288,13 @@ Token *get_token(Lexer *lexer) {
 
     lexer->source = lexer->current;
 
-    if (is_at_end(lexer))
+    if (is_at_end(lexer)) {
+        if (lexer->indent_top > 0) {
+            lexer->indent_top--;
+            return make_token(lexer, TOKEN_DEDENT);
+        }
         return make_token(lexer, TOKEN_EOF);
+    }
 
     char c = advance(lexer);
 
@@ -274,7 +336,7 @@ Token *get_token(Lexer *lexer) {
     case ')':
         return make_token(lexer, TOKEN_RPAREN);
     case '[':
-        return make_token(lexer, TOKNE_LBRAKET);
+        return make_token(lexer, TOKEN_LBRAKET);
     case ']':
         return make_token(lexer, TOKEN_RBRAKET);
     case '.':
@@ -287,6 +349,7 @@ Token *get_token(Lexer *lexer) {
                     lexer->line);
             exit(1);
         }
+        need_indent = 1;
         return make_token(lexer, TOKEN_COLON);
     case '=':
         if (match(lexer, '='))
@@ -366,7 +429,7 @@ const char *token_type_to_string(TokenType type) {
         return "LPAREN";
     case TOKEN_RPAREN:
         return "RPAREN";
-    case TOKNE_LBRAKET:
+    case TOKEN_LBRAKET:
         return "LBRAKET";
     case TOKEN_RBRAKET:
         return "RBRAKET";

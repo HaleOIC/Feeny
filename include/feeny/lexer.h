@@ -29,7 +29,7 @@ typedef enum {
     // Symbols
     TOKEN_LPAREN,  // (
     TOKEN_RPAREN,  // )
-    TOKNE_LBRAKET, // [
+    TOKEN_LBRAKET, // [
     TOKEN_RBRAKET, // ]
     TOKEN_DOT,     // .
     TOKEN_COLON,   // :
