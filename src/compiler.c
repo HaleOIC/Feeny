@@ -790,6 +790,9 @@ static void compileExpr(CompileInfo *info, Exp *expr) {
     case REF_EXP:
         compileRefExpr(info, (RefExp *)expr);
         break;
+    default:
+        fprintf(stderr, "Unknown expression type: %d\n", expr->tag);
+        break;
     }
 }
 

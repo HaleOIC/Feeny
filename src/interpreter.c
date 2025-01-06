@@ -727,6 +727,7 @@ Obj *exec_stmt(EnvObj *env, ScopeStmt *stmt) {
         printf("Unknown statement!!!");
     }
     }
+    return NULL;
 }
 
 void interpret(ScopeStmt *stmt) {

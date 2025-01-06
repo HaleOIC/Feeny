@@ -448,6 +448,7 @@ static Exp *parse_primary(Parser *parser) {
     }
 
     parser_error(parser, "Unexpected token.");
+    return NULL;
 }
 
 // Parse statement

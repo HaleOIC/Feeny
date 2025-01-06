@@ -64,6 +64,16 @@ clean_docker: stop
 .PHONY: rebuild_docker
 rebuild_docker: clean_docker build_docker run_docker
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    CC = clang
+    CFLAGS = -g -O3 -I./include
+else
+    CC = gcc
+    CFLAGS = -g -O3 -I./include -Wno-int-to-void-pointer-cast
+endif
+
 .PHONY: compile
-compile: 
-	gcc -g -O3 -I./include ./src/*.c -o ./bin/cfeeny -Wno-int-to-void-pointer-cast
+compile:
+	@echo "Compiling with $(CC)..."
+	$(CC) $(CFLAGS) ./src/*.c -o ./bin/cfeeny
