@@ -16,12 +16,11 @@ fi
 # Clean output folder - only if directory exists and contains files
 if [ -d "../output/bytecode_compiler" ]; then
     rm -f ../output/bytecode_compiler/*.out 2>/dev/null
-    rm -f ../output/bytecode_compiler/*.bc 2>/dev/null
 fi
 # Run output
 function test {
-    ../bin/parser -i ./$1.feeny -oast ../output/bytecode_compiler/$1.ast
-    ../bin/cfeeny -f ../output/bytecode_compiler/$1.ast > ../output/bytecode_compiler/$1.out
+    echo "Running bytecode compiler on $1.feeny"
+    ../bin/cfeeny -f ./$1.feeny > ../output/bytecode_compiler/$1.out
 }
 test hello
 test hello2

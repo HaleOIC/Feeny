@@ -13,12 +13,11 @@ fi
 
 # Clean output folder
 rm ../output/astInterpreter/*.out > /dev/null 2>&1
-rm ../output/astInterpreter/*.ast > /dev/null 2>&1
 
 # Run output
 function test {
-    ../bin/parser -i ./$1.feeny -oast ../output/astInterpreter/$1.ast
-    ../bin/cfeeny -a ../output/astInterpreter/$1.ast > ../output/astInterpreter/$1.out
+    echo "Running AST interpreter on $1.feeny"
+    ../bin/cfeeny -a ./$1.feeny > ../output/astInterpreter/$1.out
 }
 test hello
 test hello2
