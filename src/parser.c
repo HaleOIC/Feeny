@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEBUG_LEXER 1
-#define DEBUG_PARSER 1
+// #define DEBUG_LEXER 1
+// #define DEBUG_PARSER 1
 
 static Exp *parse_expression(Parser *parser);
 static ScopeStmt *parse_scope_statement(Parser *parser);
@@ -64,140 +64,299 @@ static void consume(Parser *parser, TokenType type, const char *message) {
     parser_error(parser, message);
 }
 
-// Parse Expression
-static Exp *parse_operation(Parser *parser, Exp *lhs) {
-    if (match(parser, TOKEN_PLUS) || match(parser, TOKEN_MINUS) ||
-        match(parser, TOKEN_STAR) || match(parser, TOKEN_SLASH) ||
-        match(parser, TOKEN_PERCENT) || match(parser, TOKEN_LT) ||
-        match(parser, TOKEN_GT) || match(parser, TOKEN_LE) ||
-        match(parser, TOKEN_GE) || match(parser, TOKEN_EQ)) {
-        char *op = previous(parser)->lexeme;
-        Exp *rhs = parse_expression(parser);
+// expr -> assign
+static Exp *parse_expression(Parser *parser) {
+    return parse_assign(parser);
+}
 
-        // Convert to method call
+// assign -> lvalue "=" assign | compare
+static Exp *parse_assign(Parser *parser) {
+    Exp *expr = parse_compare(parser);
+
+    if (is_valid_lvalue(expr) && match(parser, TOKEN_EQUAL)) {
+        Exp *rhs = parse_assign(parser);
+        if (expr->tag == REF_EXP) {
+            return make_SetExp(((RefExp *)expr)->name, rhs);
+        }
+        if (expr->tag == SLOT_EXP) {
+            return make_SetSlotExp(((SlotExp *)expr)->name, ((SlotExp *)expr)->exp, rhs);
+        }
+        if (expr->tag == CALL_SLOT_EXP) {
+            CallSlotExp *call = (CallSlotExp *)expr;
+            if (strcmp(call->name, "get") != 0) {
+                parser_error(parser, "Invalid assignment target");
+            }
+
+            Exp **args = malloc((call->nargs + 1) * sizeof(Exp *));
+
+            for (int i = 0; i < call->nargs; i++) {
+                args[i] = call->args[i];
+            }
+            args[call->nargs] = rhs;
+
+            return make_CallSlotExp("set", call->exp, call->nargs + 1, args);
+        }
+        parser_error(parser, "Invalid assignment target");
+    }
+
+    return expr;
+}
+
+// Left-hand side value can not be a method call
+// except for array access
+// lvalue -> chain ( "[" expression "]" | "." IDENTIFIER )*
+static Exp *parse_lvalue(Parser *parser) {
+    Exp *expr = parse_chain(parser);
+
+    while (true) {
+        if (match(parser, TOKEN_LBRAKET)) {
+            // a[x, y, z] => a.get(x, y, z)
+            Exp **args = NULL;
+            int arg_count = 0;
+
+            do {
+                Exp *index = parse_expression(parser);
+                args = realloc(args, (arg_count + 1) * sizeof(Exp *));
+                args[arg_count++] = index;
+                if (!match(parser, TOKEN_COMMA)) {
+                    break;
+                }
+            } while (1);
+
+            consume(parser, TOKEN_RBRAKET, "Expect ']' after index");
+            expr = make_CallSlotExp("get", expr, arg_count, args);
+        } else if (match(parser, TOKEN_DOT)) {
+            consume(parser, TOKEN_IDENTIFIER, "Expect property name");
+            char *name = strdup(previous(parser)->lexeme);
+            expr = make_SlotExp(name, expr);
+        } else {
+            break;
+        }
+    }
+
+    return expr;
+}
+
+// Helper function: check if the expression is a valid lvalue
+static bool is_valid_lvalue(Exp *expr) {
+    if (expr->tag == REF_EXP) {
+        return true;
+    }
+    if (expr->tag == SLOT_EXP) {
+        return true;
+    }
+    if (expr->tag == CALL_SLOT_EXP) {
+        CallSlotExp *call = (CallSlotExp *)expr;
+        return strcmp(call->name, "get") == 0;
+    }
+    return false;
+}
+
+// compare-> term (("<" | "<=" | ">" | ">=" | "==") term)*
+static Exp *parse_compare(Parser *parser) {
+    Exp *expr = parse_term(parser);
+
+    while (match(parser, TOKEN_LT) || match(parser, TOKEN_LE) ||
+           match(parser, TOKEN_GT) || match(parser, TOKEN_GE) ||
+           match(parser, TOKEN_EQ)) {
+        char *op = previous(parser)->lexeme;
+        Exp *right = parse_term(parser);
+
         char *method_name;
-        if (strcmp(op, "+") == 0)
-            method_name = "add";
-        else if (strcmp(op, "-") == 0)
-            method_name = "sub";
-        else if (strcmp(op, "*") == 0)
-            method_name = "mul";
-        else if (strcmp(op, "/") == 0)
-            method_name = "div";
-        else if (strcmp(op, "%") == 0)
-            method_name = "mod";
-        else if (strcmp(op, "<") == 0)
+        if (strcmp(op, "<") == 0)
             method_name = "lt";
-        else if (strcmp(op, ">") == 0)
-            method_name = "gt";
         else if (strcmp(op, "<=") == 0)
             method_name = "le";
+        else if (strcmp(op, ">") == 0)
+            method_name = "gt";
         else if (strcmp(op, ">=") == 0)
             method_name = "ge";
         else
             method_name = "eq";
 
         Exp **args = malloc(sizeof(Exp *));
-        args[0] = rhs;
-        return make_CallSlotExp(strdup(method_name), lhs, 1, args);
+        args[0] = right;
+        expr = make_CallSlotExp(strdup(method_name), expr, 1, args);
     }
-
-    return NULL;
+    return expr;
 }
 
-// Left-hand side value can not be a method call
-// except for array access
-static Exp *parse_lhs(Parser *parser) {
-    Exp *result = NULL;
-    consume(parser, TOKEN_IDENTIFIER, "Expect variable name.");
-    char *name = strdup(previous(parser)->lexeme);
-    if (match(parser, TOKEN_DOT)) {
-        // Slot access
-        consume(parser, TOKEN_IDENTIFIER, "Expect property name after '.'.");
-        char *slot_name = strdup(previous(parser)->lexeme);
-        result = make_SlotExp(slot_name, make_RefExp(name));
-    } else if (match(parser, TOKNE_LBRAKET)) {
-        // Array access
-        Exp *index = parse_expression(parser);
-        consume(parser, TOKEN_RBRAKET, "Expect ']' after array index.");
-        result = make_CallSlotExp("get", make_RefExp(name), 1, &index);
-    } else {
-        // Variable reference
-        result = make_RefExp(name);
+// term -> factor (("+" | "-") factor)*
+static Exp *parse_term(Parser *parser) {
+    Exp *expr = parse_factor(parser);
+
+    while (match(parser, TOKEN_PLUS) || match(parser, TOKEN_MINUS)) {
+        char *op = previous(parser)->lexeme;
+        Exp *right = parse_factor(parser);
+
+        char *method_name = (strcmp(op, "+") == 0) ? "add" : "sub";
+
+        Exp **args = malloc(sizeof(Exp *));
+        args[0] = right;
+        expr = make_CallSlotExp(strdup(method_name), expr, 1, args);
     }
-    return result;
+    return expr;
 }
 
-static Exp *parse_expression(Parser *parser) {
-    // Unary operators
+// factor -> unary (("*" | "/" | "%") unary)*
+static Exp *parse_factor(Parser *parser) {
+    Exp *expr = parse_unary(parser);
+
+    while (match(parser, TOKEN_STAR) || match(parser, TOKEN_SLASH) ||
+           match(parser, TOKEN_PERCENT)) {
+        char *op = previous(parser)->lexeme;
+        Exp *right = parse_unary(parser);
+
+        char *method_name;
+        if (strcmp(op, "*") == 0)
+            method_name = "mul";
+        else if (strcmp(op, "/") == 0)
+            method_name = "div";
+        else
+            method_name = "mod";
+
+        Exp **args = malloc(sizeof(Exp *));
+        args[0] = right;
+        expr = make_CallSlotExp(strdup(method_name), expr, 1, args);
+    }
+    return expr;
+}
+
+// unary -> "-"* chain
+static Exp *parse_unary(Parser *parser) {
     if (match(parser, TOKEN_MINUS)) {
-        Exp *operand = parse_expression(parser);  // 递归处理操作数
-        return make_CallSlotExp("neg", operand, 0, NULL);
+        Exp *expr = parse_unary(parser);
+
+        // -a = 0 - a
+        Exp **args = malloc(sizeof(Exp *));
+        args[0] = expr;
+        return make_CallSlotExp(strdup("sub"), make_IntExp(0), 1, args);
     }
 
+    return parse_chain(parser);
+}
+
+// chain -> primary (("[" expr "]" | "." IDENTIFIER ("(" args? ")")? | "(" args? ")"))*
+static Exp *parse_chain(Parser *parser) {
+    Exp *expr = parse_primary(parser);
+    if (expr->tag == PRINTF_EXP || expr->tag == ARRAY_EXP || expr->tag == OBJECT_EXP) {
+        return expr;
+    }
+
+    bool is_simple_identifier = expr->tag == REF_EXP;
+    bool last_was_field_access = false;
+
+    while (true) {
+        if (match(parser, TOKEN_LBRAKET)) {
+            // a[x, y, z] => a.get(x, y, z)
+            Exp **args = NULL;
+            int arg_count = 0;
+
+            do {
+                Exp *index = parse_expression(parser);
+                args = realloc(args, (arg_count + 1) * sizeof(Exp *));
+                args[arg_count++] = index;
+                if (!match(parser, TOKEN_COMMA)) {
+                    break;
+                }
+            } while (1);
+
+            consume(parser, TOKEN_RBRAKET, "Expect ']' after index");
+            expr = make_CallSlotExp(strdup("get"), expr, arg_count, args);
+            is_simple_identifier = false;
+            last_was_field_access = true;
+
+        } else if (match(parser, TOKEN_DOT)) {
+            consume(parser, TOKEN_IDENTIFIER, "Expect property name after '.'");
+            char *name = strdup(previous(parser)->lexeme);
+
+            // Check if the next token is a left parenthesis
+            if (match(parser, TOKEN_LPAREN)) {
+                // if a.b(), create CallExp
+                int arg_count = 0;
+                Exp **args = NULL;
+
+                if (!check(parser, TOKEN_RPAREN)) {
+                    do {
+                        arg_count++;
+                        args = realloc(args, sizeof(Exp *) * arg_count);
+                        args[arg_count - 1] = parse_expression(parser);
+                    } while (match(parser, TOKEN_COMMA));
+                }
+
+                consume(parser, TOKEN_RPAREN, "Expect ')' after arguments");
+                expr = make_CallSlotExp(name, expr, arg_count, args);
+                last_was_field_access = false;
+            } else {
+                expr = make_SlotExp(name, expr);
+                last_was_field_access = true;
+            }
+            is_simple_identifier = false;
+
+        } else if (match(parser, TOKEN_LPAREN)) {
+            if (!is_simple_identifier && !last_was_field_access) {
+                parser_error(parser, "Invalid function call syntax");
+            }
+
+            int arg_count = 0;
+            Exp **args = NULL;
+
+            if (!check(parser, TOKEN_RPAREN)) {
+                do {
+                    arg_count++;
+                    args = realloc(args, sizeof(Exp *) * arg_count);
+                    args[arg_count - 1] = parse_expression(parser);
+                } while (match(parser, TOKEN_COMMA));
+            }
+
+            consume(parser, TOKEN_RPAREN, "Expect ')' after arguments");
+
+            if (is_simple_identifier) {
+                char *name = ((RefExp *)expr)->name;
+                expr = make_CallExp(strdup(name), arg_count, args);
+            } else {
+                expr = make_CallExp(((SlotExp *)expr)->name, arg_count, args);
+            }
+            is_simple_identifier = false;
+            last_was_field_access = false;
+
+        } else {
+            break;
+        }
+    }
+
+    return expr;
+}
+
+// primary -> NUMBER | NULL | IDENTIFIER | "(" expr ")" | "if" expr ":" scope_stmt ("else" ":" scope_stmt)?
+//          | "while" expr ":" scope_stmt | "object" (IDENTIFIER | ":") ":" INDENT slot_stmt* DEDENT
+static Exp *parse_primary(Parser *parser) {
+    // Number
+    if (match(parser, TOKEN_INTEGER)) {
+        int value = atoi(previous(parser)->lexeme);
+        return make_IntExp(value);
+    }
+
+    // Null
+    if (match(parser, TOKEN_NULL)) {
+        return make_NullExp();
+    }
+
+    // "(" expr ")"
     if (match(parser, TOKEN_LPAREN)) {
         Exp *expr = parse_expression(parser);
         consume(parser, TOKEN_RPAREN, "Expect ')' after expression.");
         return expr;
-    } else if (match(parser, TOKEN_INTEGER)) {
-        int value = atoi(previous(parser)->lexeme);
-        return make_IntExp(value);
-    } else if (match(parser, TOKEN_NULL)) {
-        return make_NullExp();
-    } else if (check(parser, TOKEN_IDENTIFIER)) {
-        Exp *lhs = parse_lhs(parser);
+    }
 
-        // Check if it's a method call, or just a reference, or a slot access, or a slot assignment
-        if (match(parser, TOKEN_EQUAL)) {
-            Exp *rhs = parse_expression(parser);
-            if (rhs->tag == CALL_SLOT_EXP) {
-                CallSlotExp *call = (CallSlotExp *)rhs;
-                if (strcmp(call->name, "get") == 0) {
-                    Exp **args = (Exp **)malloc(sizeof(Exp *) * 2);
-                    args[0] = call->args[0];
-                    args[1] = rhs;
-                    return make_CallSlotExp("set", call->exp, 2, args);
-                }
-            } else if (rhs->tag == SLOT_EXP) {
-                SlotExp *slot = (SlotExp *)rhs;
-                return make_SetSlotExp(slot->name, slot->exp, rhs);
-            }
-            RefExp *ref = (RefExp *)lhs;
-            return make_SetExp(ref->name, rhs);
-        }
+    // IDENTIFIER
+    if (match(parser, TOKEN_IDENTIFIER)) {
+        char *name = strdup(previous(parser)->lexeme);
+        return make_RefExp(name);
+    }
 
-        // Maybe it is a method call
-        if (match(parser, TOKEN_LPAREN)) {
-            Vector *args = make_vector();
-
-            if (!check(parser, TOKEN_RPAREN)) {
-                do {
-                    vector_add(args, parse_expression(parser));
-                } while (match(parser, TOKEN_COMMA));
-            }
-
-            consume(parser, TOKEN_RPAREN, "Expect ')' after arguments.");
-
-            if (lhs->tag == REF_EXP) {
-                RefExp *ref = (RefExp *)lhs;
-                lhs = make_CallExp(ref->name, vector_size(args), (Exp **)args->array);
-            } else if (lhs->tag == SLOT_EXP) {
-                SlotExp *slot = (SlotExp *)lhs;
-                lhs = make_CallSlotExp(slot->name, slot->exp, vector_size(args), (Exp **)args->array);
-            } else {
-                parser_error(parser, "Can only call functions and methods.");
-            }
-        }
-
-        // It needs another operation on this expression
-        Exp *result = NULL;
-        result = parse_operation(parser, lhs);
-        if (result != NULL) {
-            return result;
-        }
-
-        return lhs;
-    } else if (match(parser, TOKEN_IF)) {
+    // If expression
+    if (match(parser, TOKEN_IF)) {
         Exp *condition = parse_expression(parser);
         consume(parser, TOKEN_COLON, "Expect ':' after if condition.");
 
@@ -216,8 +375,10 @@ static Exp *parse_expression(Parser *parser) {
         }
 
         return make_IfExp(condition, then_branch, else_branch);
+    }
 
-    } else if (match(parser, TOKEN_WHILE)) {
+    // While expression
+    if (match(parser, TOKEN_WHILE)) {
         Exp *condition = parse_expression(parser);
         consume(parser, TOKEN_COLON, "Expect ':' after while condition.");
         consume(parser, TOKEN_INDENT, "Expect indentation after while condition.");
@@ -225,8 +386,10 @@ static Exp *parse_expression(Parser *parser) {
         consume(parser, TOKEN_DEDENT, "Expect dedent after while body.");
 
         return make_WhileExp(condition, body);
+    }
 
-    } else if (match(parser, TOKEN_OBJECT)) {
+    // Object expression
+    if (match(parser, TOKEN_OBJECT)) {
         Exp *parent = NULL;
         if (!check(parser, TOKEN_COLON)) {
             parent = parse_expression(parser);
@@ -243,8 +406,10 @@ static Exp *parse_expression(Parser *parser) {
 
         Exp *result = make_ObjectExp(parent, vector_size(slots), (SlotStmt **)slots->array); // 修改
         return result;
+    }
 
-    } else if (match(parser, TOKEN_ARRAY)) {
+    // Array expression
+    if (match(parser, TOKEN_ARRAY)) {
         consume(parser, TOKEN_LPAREN, "Expect '(' after 'array'.");
         Exp *length = parse_expression(parser);
         consume(parser, TOKEN_COMMA, "Expect ',' after array length.");
@@ -252,14 +417,16 @@ static Exp *parse_expression(Parser *parser) {
         consume(parser, TOKEN_RPAREN, "Expect ')' after array initialization.");
 
         return make_ArrayExp(length, init);
+    }
 
-    } else if (match(parser, TOKEN_PRINTF)) {
+    // Printf expression
+    if (match(parser, TOKEN_PRINTF)) {
         consume(parser, TOKEN_LPAREN, "Expect '(' after 'printf'.");
 
-        if (!check(parser, TOKEN_STRING)) {
+        if (!match(parser, TOKEN_STRING)) {
             parser_error(parser, "Expect string literal in printf.");
         }
-        const char *raw_string = advance(parser)->lexeme;
+        char *raw_string = previous(parser)->lexeme;
 
         size_t len = strlen(raw_string);
         if (len < 2) {
@@ -280,8 +447,7 @@ static Exp *parse_expression(Parser *parser) {
         return result;
     }
 
-    printf("Unexpected token: ");
-    print_token(peek(parser));
+    parser_error(parser, "Unexpected token.");
 }
 
 // Parse statement

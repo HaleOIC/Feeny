@@ -85,38 +85,38 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Error: Failed to parse input file\n");
         return 1;
     }
-    printf("\n\n\n");
+    // printf("\n\n\n");
 
-    print_scopestmt(stmt);
+    // print_scopestmt(stmt);
 
-    // switch (mode) {
-    // case MODE_AST: {
-    //     if (verbose)
-    //         printf("Interpreting AST...\n");
-    //     interpret(stmt);
-    //     break;
-    // }
+    switch (mode) {
+    case MODE_AST: {
+        if (verbose)
+            printf("Interpreting AST...\n");
+        interpret(stmt);
+        break;
+    }
 
-    // case MODE_FULL: {
-    //     Program *program = compile(stmt);
-    //     if (verbose)
-    //         printf("Initializing VM...\n");
+    case MODE_FULL: {
+        Program *program = compile(stmt);
+        if (verbose)
+            printf("Initializing VM...\n");
 
-    //     // print_prog(program);
+        // print_prog(program);
 
-    //     // Allocate new machine and link the program to it
-    //     Machine *machine = (Machine *)malloc(sizeof(Machine));
-    //     initvm(program);
+        // Allocate new machine and link the program to it
+        Machine *machine = (Machine *)malloc(sizeof(Machine));
+        initvm(program);
 
-    //     if (verbose)
-    //         printf("Running VM...\n");
+        if (verbose)
+            printf("Running VM...\n");
 
-    //     // Actually run the vm to get output
-    //     runvm();
+        // Actually run the vm to get output
+        runvm();
 
-    //     break;
-    // }
-    // }
+        break;
+    }
+    }
 
     return 0;
 }
