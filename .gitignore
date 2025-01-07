@@ -33,3 +33,28 @@ temp/
 *.tmp
 *.bak
 *.log
+
+# LaTeX temporary files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# PDF output - uncomment if you don't want to track PDF files
+# *.pdf
+
+# LaTeX compilation database
+*.fdb_*
+
+# Backup files
+*~
+
+# macOS system files
+.DS_Store
+
+# Editor specific files
+.vscode/
+.idea/
