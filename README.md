@@ -97,3 +97,11 @@ defn main():
 
 main()
 ```
+
+### Test
+
+```bash
+cd test
+./run_test_bytecode_compiler.sh
+./run_test_ast_interpreter.sh
+```
