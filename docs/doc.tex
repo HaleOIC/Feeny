@@ -1,0 +1,820 @@
+\documentclass[12pt, a4paper]{article}
+
+% ====== Basic Packages ======
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{fancyhdr}
+
+% Define Feeny colors
+\definecolor{feenyKeyword}{RGB}{155,35,147}  
+\definecolor{feenyString}{RGB}{206,145,120}  
+\definecolor{feenyComment}{RGB}{87,166,74}   
+\definecolor{feenyNumber}{RGB}{181,206,168}  
+\definecolor{feenyMethod}{RGB}{97,175,239}   
+\definecolor{feenyBackground}{RGB}{30,30,30} 
+
+% Define Feeny language
+\lstdefinelanguage{Feeny}{
+  % Keywords
+  morekeywords={
+    var, defn, method, object, if, else, while, null, 
+    this, class, new, array, printf
+  },
+  % String delimiters
+  morestring=[b]",
+  % Comments
+  morecomment=[l]{;},
+  % Special symbols
+  otherkeywords={
+    =, +, -, *, /, <, >, <=, >=, ==, ., :, (, ), [, ]
+  },
+  % Sensitive to case
+  sensitive=true,
+  % Additional specifications
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=true,
+}
+
+% Define single listing style (remove the duplicate \lstset)
+\lstset{
+    language=Feeny,
+    frame=single,
+    backgroundcolor=\color{white},  % 白色背景
+    rulecolor=\color{black},
+    numbers=left,
+    numbersep=5pt,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    showstringspaces=false,
+    captionpos=b,
+    xleftmargin=1em,
+    tabsize=4,
+    basicstyle=\ttfamily\small\color{black},  % 黑色文字
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange}
+}
+
+
+% ====== Header and Footer ======
+\pagestyle{fancy}
+\rhead{\thepage}
+\lhead{Feeny}
+
+% ====== Document Information ======
+\title{Feeny Language}
+\author{Hale}
+\date{\today}
+
+% ====== Document Begin ======
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section*{Acknowledgments} 
+This project was first introduced in the University of California, Berkeley graduate course "Virtual Machines and Managed Runtimes" (CS294) taught by Mario Wolczko and Patrick S. Li in 2015. The course provides a hands-on approach to understanding virtual machines by implementing Feeny from scratch, starting with a simple AST interpreter and progressing to an optimized bytecode virtual machine.
+
+The current implementation, while inspired by the original course project, has been independently developed with all components reimplemented from the ground up. Notable modifications include an extended parser grammar for enhanced language features and a focus on robust virtual machine implementation.
+\section{Language Fundamentals}
+
+\subsection{Language Overview}
+Feeny is an object-oriented, imperative, dynamically typed programming language designed for educational purposes. It shares similar core functionality with popular scripting languages like Python, JavaScript, and Ruby, while maintaining a lean implementation that can be completed by a single student in a semester-long course.
+
+\subsection{Lexical Structure}
+
+\subsubsection{Comments}
+Comments in Feeny begin with a semicolon (;) and continue to the end of the line:
+
+\begin{lstlisting}
+var c = 0    ;Initialize c to zero
+while c < 9: ;Proceed when c is less than nine
+\end{lstlisting}
+
+\subsubsection{Indentation Structure}
+Feeny uses indentation to indicate code blocks. Lines ending with a colon (:) automatically wrap the following indented block in parentheses:
+
+\begin{lstlisting}
+while i < 10:
+    do-this()
+    do-that()
+    
+;equivalent to:
+while i < 10: (do-this() do-that())
+\end{lstlisting}
+
+\subsubsection{Comma Handling}
+Commas in Feeny are treated identically to whitespace and are used solely for readability:
+
+\begin{lstlisting}
+f(a, b, c)  ;equivalent to f(a b c)
+\end{lstlisting}
+
+\subsubsection{Parenthesis Rules}
+Identifiers immediately followed by opening parentheses have special handling:
+
+\begin{lstlisting}
+f(a(1 + 2))   ;f function call with result of a(1 + 2)
+f(a (1 + 2))  ;f function call with two arguments
+\end{lstlisting}
+
+\subsection{Basic Types and Values}
+
+\subsubsection{Integers}
+Integers in Feeny are 32-bit values supporting basic arithmetic operations:
+
+\begin{lstlisting}
+var x = 42        ;integer literal
+var y = x + 10    ;arithmetic operation
+var z = x.add(10) ;equivalent method call
+\end{lstlisting}
+
+\subsubsection{Null}
+Null is a special object representing an empty environment with no slots:
+
+\begin{lstlisting}
+var empty = null
+if empty: ;will not execute as null is false
+\end{lstlisting}
+
+\subsubsection{Arrays}
+Arrays are fixed-length sequences with an initial value, accessed using square brackets:
+
+\begin{lstlisting}
+var arr = array(10, 0)  ;length 10, all elements 0
+arr[0] = 42             ;set first element
+arr.set(0, 42)          ;equivalent method call
+var val = arr[0]        ;get first element
+var val = arr.get(0)    ;equivalent method call
+var len = arr.length()  ;get array length
+\end{lstlisting}
+set and get are methods for setting and getting array elements, they can be overloaded, like arr[i,j] = 42 equivalent to arr.set(i,j,42)
+if the arr object has rewrite the set method.
+
+\subsubsection{Objects}
+Objects in Feeny use a slot-based system with variable and method slots:
+
+\begin{lstlisting}
+object:
+    var x = 10
+    var y = 20
+    method add():
+        this.x + this.y
+\end{lstlisting}
+
+\subsection{Control Flow}
+
+\subsubsection{Conditional Statements}
+If expressions in Feeny, one important thing is when condition is evaluated to null object, it will be treated as false, otherwise, it will be treated as true(0 is true)
+
+\begin{lstlisting}
+if condition:
+    true-branch
+else:
+    false-branch
+\end{lstlisting}
+
+\subsubsection{Loops}
+While loops in Feeny, the condition rule is the same as if expression
+
+\begin{lstlisting}
+while condition:
+    body
+\end{lstlisting}
+
+\subsection{Operator Syntax}
+All operators in Feeny are syntactic sugar for method calls:
+
+\begin{lstlisting}
+x + y   ;expands to x.add(y)
+x - y   ;expands to x.sub(y)
+x * y   ;expands to x.mul(y)
+x / y   ;expands to x.div(y)
+x % y   ;expands to x.mod(y)
+x < y   ;expands to x.lt(y)
+x > y   ;expands to x.gt(y)
+x <= y  ;expands to x.le(y)
+x >= y  ;expands to x.ge(y)
+x == y  ;expands to x.eq(y)
+\end{lstlisting}
+like array's set and get methods, if the object has rewrite the add method, the + operator will invoke the object own add method.
+
+\subsection{Scoping Rules}
+Feeny implements several scoping levels:
+\begin{itemize}
+    \item Global scope for top-level definitions
+    \item Local scope for function variables
+    \item Object scope for slots within objects
+    \item The \texttt{this} keyword is required for accessing object slots
+\end{itemize}
+
+
+\section{Language Grammar}
+
+The grammar of Feeny is defined using Extended Backus-Naur Form (EBNF). Terminal symbols are shown in \textbf{bold}, and nonterminals are in plain text.
+
+\subsection{Program Structure}
+\[
+\begin{aligned}
+\text{program} &\rightarrow \text{scope\_stmt} \\
+\end{aligned}
+\]
+
+\subsection{Statements}
+\[
+\begin{aligned}
+\text{scope\_stmt} &\rightarrow (\text{var\_decl} \mid \text{fn\_decl} \mid \text{expression})* \\
+\text{var\_decl} &\rightarrow \textbf{var}\ \text{IDENTIFIER}\ \textbf{=}\ \text{expression} \\
+\text{fn\_decl} &\rightarrow \textbf{defn}\ \text{IDENTIFIER}\ \textbf{(}\ \text{parameters}?\ \textbf{)}\ \textbf{:}\ \text{INDENT}\ \text{scope\_stmt}\ \text{DEDENT} \\
+\text{slot\_stmt} &\rightarrow \text{var\_slot} \mid \text{method\_slot} \\
+\text{var\_slot} &\rightarrow \textbf{var}\ \text{IDENTIFIER}\ \textbf{=}\ \text{expression} \\
+\text{method\_slot} &\rightarrow \textbf{method}\ \text{IDENTIFIER}\ \textbf{(}\ \text{parameters}?\ \textbf{)}\ \textbf{:}\ \text{INDENT}\ \text{scope\_stmt}\ \text{DEDENT}
+\end{aligned}
+\]
+
+\subsection{Expressions}
+\[
+\begin{aligned}
+\text{expression} &\rightarrow \text{assign} \\
+\text{assign} &\rightarrow \text{lvalue}\ \textbf{=}\ \text{assign} \mid \text{compare} \\
+\text{lvalue} &\rightarrow \text{chain} (\textbf{.}\ \text{IDENTIFIER}\ | \textbf{[}\ \text{expression}\ \textbf{]})* \\
+\text{compare} &\rightarrow \text{term}\ (\text{comp\_op}\ \text{term})* \\
+\text{comp\_op} &\rightarrow \textbf{<} \mid \textbf{<=} \mid \textbf{>} \mid \textbf{>=} \mid \textbf{==} \\
+\text{term} &\rightarrow \text{factor}\ ((\textbf{+} \mid \textbf{-})\ \text{factor})* \\
+\text{factor} &\rightarrow \text{unary}\ ((\textbf{*} \mid \textbf{/} \mid \textbf{\%})\ \text{unary})* \\
+\text{unary} &\rightarrow \textbf{-}*\ \text{chain} \\
+\end{aligned}
+\]
+
+\subsection{Chain and Primary Expressions}
+\[
+\begin{aligned}
+\text{chain} &\rightarrow \text{primary}\ \text{chain\_suffix}* \\
+\text{chain\_suffix} &\rightarrow \textbf{[}\ \text{expression}\ \textbf{]} \\
+&\mid \textbf{.}\ \text{IDENTIFIER}\ (\textbf{(}\ \text{args}?\ \textbf{)})? \\
+& \\
+\end{aligned}
+\]
+
+\[
+\begin{aligned}
+\text{primary} &\rightarrow \text{NUMBER} \mid \textbf{null} \mid \text{IDENTIFIER} \mid \textbf{(}\ \text{expression}\ \textbf{)} \\
+&\mid \text{if\_expr} \mid \text{while\_expr} \mid \text{object\_expr} \mid \text{array\_expr} \mid \text{printf\_expr} \\
+&\mid  \text{IDENTIFIER}\ \textbf{(}\ \text{args}?\ \textbf{)} \\
+\end{aligned}
+\]
+
+\subsection{Complex Expressions}
+\[
+\begin{aligned}
+\text{if\_expr} &\rightarrow \textbf{if}\ \text{expression}\ \textbf{:}\ \text{INDENT}\ \text{scope\_stmt}\ \text{DEDENT} \\
+&\quad (\textbf{else}\ \textbf{:}\ \text{INDENT}\ \text{scope\_stmt}\ \text{DEDENT})? \\
+\text{while\_expr} &\rightarrow \textbf{while}\ \text{expression}\ \textbf{:}\ \text{INDENT}\ \text{scope\_stmt}\ \text{DEDENT} \\
+\text{object\_expr} &\rightarrow \textbf{object}\ (\text{expression} \mid \textbf{:})\ \textbf{:}\ \text{INDENT}\ \text{slot\_stmt}*\ \text{DEDENT} \\
+\text{array\_expr} &\rightarrow \textbf{array}\ \textbf{(}\ \text{expression}\ \textbf{,}\ \text{expression}\ \textbf{)} \\
+\text{printf\_expr} &\rightarrow \textbf{printf}\ \textbf{(}\ \text{STRING}\ (\textbf{,}\ \text{expression})*\ \textbf{)}
+\end{aligned}
+\]
+
+\subsection{Helpers}
+\[
+\begin{aligned}
+\text{parameters} &\rightarrow \text{IDENTIFIER}\ (\textbf{,}\ \text{IDENTIFIER})* \\
+\text{args} &\rightarrow \text{expression}\ (\textbf{,}\ \text{expression})*
+\end{aligned}
+\]
+
+\subsection{Lexical Rules}
+\[
+\begin{aligned}
+\text{NUMBER} &\rightarrow \text{DIGIT}+ \\
+\text{IDENTIFIER} &\rightarrow \text{ALPHA}\ (\text{ALPHA} \mid \text{DIGIT})* \\
+\text{STRING} &\rightarrow \textbf{"}\ [^\textbf{"}]*\ \textbf{"} \\
+\text{ALPHA} &\rightarrow \text{[a-zA-Z\_]} \\
+\text{DIGIT} &\rightarrow \text{[0-9]} \\
+\text{INDENT} &\rightarrow \text{increase in indentation level} \\
+\text{DEDENT} &\rightarrow \text{decrease in indentation level}
+\end{aligned}
+\]
+
+\subsection{Operator Precedence}
+Operators are listed in order of decreasing precedence:
+
+\begin{enumerate}
+\item Unary operators (\textbf{-})
+\item Multiplicative operators (\textbf{*}, \textbf{/}, \textbf{\%})
+\item Additive operators (\textbf{+}, \textbf{-})
+\item Comparison operators (\textbf{<}, \textbf{<=}, \textbf{>}, \textbf{>=}, \textbf{==})
+\item Assignment (\textbf{=})
+\end{enumerate}
+
+Note: All binary operators are transformed into method calls during parsing. For example, \texttt{a + b} becomes \texttt{a.add(b)}.
+
+\section{Object Model}
+
+The Feeny language implements a tagged pointer object model for efficient memory usage and runtime performance. The object system combines immediate values for primitives with heap-allocated objects for complex data structures.
+
+\subsection{Tagged Pointers}
+All values in Feeny are represented as tagged pointers using the lower 3 bits:
+
+\[
+\begin{aligned}
+\text{TAG\_MASK} &= 7 \text{ (0b111)} \\
+\text{TAG\_BITS} &= 3 \\
+\text{INT\_TAG} &= 0 \text{ (0b000)} \\
+\text{HEAP\_TAG} &= 1 \text{ (0b001)} \\
+\text{NULL\_TAG} &= 2 \text{ (0b010)}
+\end{aligned}
+\]
+
+This allows:
+\begin{itemize}
+\item Direct integer encoding (shifted left by 3 bits)
+\item Heap object references (aligned addresses with tag bit set)
+\item Null value representation (special tag)
+\end{itemize}
+
+\subsection{Runtime Objects}
+All runtime objects share a common header containing the object type:
+
+\[
+\text{RTObj} = \begin{cases}
+\text{type}: \text{ObjType} & \text{Object type identifier}
+\end{cases}
+\]
+
+The system defines the following object types:
+\[
+\begin{aligned}
+\text{GLOBAL\_TYPE} &= 0 \\
+\text{NULL\_TYPE} &= 1 \\
+\text{INT\_TYPE} &= 2 \\
+\text{ARRAY\_TYPE} &= 3 \\
+\text{OBJECT\_TYPE} &= 4
+\end{aligned}
+\]
+
+\subsection{Object Structures}
+
+\subsubsection{Arrays}
+Arrays are heap-allocated objects with a length field and variable-sized slot array:
+
+\[
+\text{RArray} = \begin{cases}
+\text{type}: \text{ObjType} & \text{Always ARRAY\_TYPE} \\
+\text{length}: \text{size\_t} & \text{Number of elements} \\
+\text{slots[]}: \text{intptr\_t} & \text{Array elements}
+\end{cases}
+\]
+
+\subsubsection{Class Instances}
+Class instances are heap-allocated objects with a parent reference and variable slots:
+
+\[
+\text{RClass} = \begin{cases}
+\text{type}: \text{ObjType} & \text{Class-specific type} \\
+\text{parent}: \text{intptr\_t} & \text{Parent object reference} \\
+\text{var\_slots[]}: \text{intptr\_t} & \text{Instance variables}
+\end{cases}
+\]
+
+\subsubsection{Class Templates}
+Class templates store the static structure of classes:
+
+\[
+\text{TClass} = \begin{cases}
+\text{type}: \text{ObjType} & \text{Class type identifier} \\
+\text{poolIndex}: \text{int} & \text{Index in method pool} \\
+\text{varNames}: \text{Vector} & \text{Instance variable names} \\
+\text{funcNameToPoolIndex}: \text{Map} & \text{Method name to pool index mapping}
+\end{cases}
+\]
+
+\subsection{Object Creation}
+The system provides factory functions for creating different types of objects:
+
+\begin{itemize}
+\item \texttt{newIntObj(int value)}: Creates a tagged integer value
+\item \texttt{newNullObj()}: Creates a null value
+\item \texttt{newArrayObj(int length, RTObj* initValue)}: Creates an array with given length and initialization value
+\item \texttt{newClassObj(ObjType type, int slotNum)}: Creates a class instance with given type and number of slots
+\item \texttt{newTemplateClass(ObjType type, int index)}: Creates a class template
+\end{itemize}
+
+\subsection{Memory Management}
+The object system integrates with a garbage collector that:
+\begin{itemize}
+\item Uses forwarding pointers for object relocation (marked by BROKEN\_HEART type)
+\item Handles both immediate values and heap objects
+\item Maintains object references through collection cycles
+\end{itemize}
+
+The combination of tagged pointers and garbage collection provides an efficient and safe memory management system for the Feeny runtime.
+\subsection{Arithmetic Details}
+
+The arithmetic operations in our tagged primitive system require careful consideration. Let's examine how we can perform these operations efficiently using our tagging scheme.
+
+Let's denote $f(x)$ as the tagged representation of an integer value $x$, where:
+\[f(x) = 8x\]
+
+This representation means we shift every integer left by 3 bits (multiply by 8) to make room for our tag bits. The key insight is that we can perform some arithmetic operations directly on these tagged representations without converting back and forth.
+
+For addition, we want to compute $f(x + y)$ given $f(x)$ and $f(y)$. Through algebraic manipulation:
+\[
+\begin{aligned}
+f(x + y) &= 8(x + y) \\
+&= 8x + 8y \\
+&= f(x) + f(y)
+\end{aligned}
+\]
+
+For multiplication, we have two possible implementations:
+\[
+\begin{aligned}
+\text{Option 1}: & f(x \cdot y) = f(x) \cdot f^{-1}(f(y)) \\
+\text{Option 2}: & f(x \cdot y) = f^{-1}(f(x) \cdot f(y))
+\end{aligned}
+\]
+where $f^{-1}$ represents untagging operation (dividing by 8).
+
+For division and modulo operations, we need to untag both operands before performing the operation, then retag the result:
+\[
+\begin{aligned}
+f(x / y) &= f(\text{UNTAG}(f(x)) / \text{UNTAG}(f(y))) \\
+f(x \bmod y) &= f(\text{UNTAG}(f(x)) \bmod \text{UNTAG}(f(y)))
+\end{aligned}
+\]
+
+Similar to addition, subtraction can be performed directly on tagged values:
+\[
+\begin{aligned}
+f(x - y) &= 8(x - y) \\
+&= 8x - 8y \\
+&= f(x) - f(y)
+\end{aligned}
+\]
+For comparison operations ($\text{op} \in \{<, >, =, \leq, \geq\}$), the implementation follows this pattern:
+\[
+f(a \text{ op } b) = ((a \text{ op } b \text{ ? } 1 \text{ : } 0) \oplus 1) \ll 1
+\]
+
+For example, for "less than" operation:
+\[
+\begin{aligned}
+f(a < b) &= ((a < b \text{ ? } 1 \text{ : } 0) \oplus 1) \ll 1 \\
+&= \begin{cases}
+2 & \text{if } a < b \text{ is false} \\
+0 & \text{if } a < b \text{ is true}
+\end{cases}
+\end{aligned}
+\]
+
+This implementation uses bitwise XOR ($\oplus$) with 1 to invert the boolean result, and then shifts left by 1 bit to maintain our tagging scheme. The result is either 2 (representing Null) when the comparison is false, or 0 when the comparison is true.
+
+
+This representation allows us to perform arithmetic operations efficiently while maintaining the type safety provided by our tagging scheme. The key advantage is that for several operations (notably addition and subtraction), we can operate directly on the tagged values without any conversion overhead.
+
+\section{Virtual Machine Design}
+
+\subsection{Machine Architecture}
+The Feeny VM adopts a stack-based design with four key components:
+
+\subsubsection{Core Components}
+\begin{enumerate}
+\item \textbf{Global Variable Map}
+    \begin{itemize}
+    \item Maintains name-to-value mapping for all global variables
+    \item Supports lookup and update operations by name
+    \item Implemented as a hash table for efficient access
+    \end{itemize}
+
+\item \textbf{Current Local Frame}
+    \begin{itemize}
+    \item Contains function arguments and local variables
+    \item Stores return address and parent frame link
+    \item Fixed-size slots (\textit{num\_args + num\_locals})
+    \item Direct indexed access for performance
+    \end{itemize}
+
+\item \textbf{Operand Stack}
+    \begin{itemize}
+    \item Holds temporary results during expression evaluation
+    \item Basic operations: push, pop, peek
+    \item Used for passing arguments and intermediate values
+    \end{itemize}
+
+\item \textbf{Instruction Pointer}
+    \begin{itemize}
+    \item Points to next instruction to execute
+    \item Updated by control flow instructions
+    \item Used for function returns and branches
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Instruction Selection}
+The instruction set is designed around common operations while keeping the implementation simple:
+
+\subsubsection{Basic Instructions}
+\begin{itemize}
+\item \texttt{Lit(i)}: Load constants from pool
+\item \texttt{GetLocal(i)/SetLocal(i)}: Local variable access
+\item \texttt{GetGlobal(i)/SetGlobal(i)}: Global variable access
+\item \texttt{Drop()}: Stack manipulation
+\item \texttt{Print(format, n)}: Output operations
+\item \texttt{Array()}: Array creation
+\end{itemize}
+
+\subsubsection{Object Instructions}
+\begin{itemize}
+\item \texttt{Object(c)}: Object instantiation
+\item \texttt{GetSlot(i)/SetSlot(i)}: Slot access
+\item \texttt{CallSlot(i,n)}: Method invocation
+\item Special handling for primitive receivers (int/array)
+\end{itemize}
+
+\subsubsection{Control Flow Instructions}
+\begin{itemize}
+\item \texttt{Label(i)}: Define jump targets
+\item \texttt{Branch(i)}: Conditional jumps
+\item \texttt{Goto(i)}: Unconditional jumps
+\item \texttt{Return()}: Function returns
+\item \texttt{Call(i,n)}: Function calls
+\end{itemize}
+
+\subsection{Optimizations}
+
+\subsubsection{Instruction Level}
+\begin{itemize}
+\item Combined instructions for common patterns
+\item Specialized paths for primitive operations
+\item Stack caching for repeated access
+\end{itemize}
+
+\subsubsection{Method Dispatch}
+\begin{itemize}
+\item Inline caching of method lookups
+\item Fast path for primitive receivers
+\item Method table indexing
+\end{itemize}
+
+\subsubsection{Frame Access}
+\begin{itemize}
+\item Direct slot indexing
+\item Frame reuse when possible
+\item Stack-relative addressing
+\end{itemize}
+
+The VM design prioritizes:
+\begin{itemize}
+\item Simple and clear instruction semantics
+\item Efficient execution of common operations
+\item Predictable memory usage patterns
+\item Straightforward debugging and maintenance
+\end{itemize}
+
+This architecture provides a good balance between implementation complexity and runtime efficiency, while supporting all features of the Feeny language.
+
+
+
+\section{Garbage Collection}
+
+
+Feeny garbage collector implements a semi-space copying collector with a Cheney-style algorithm. The heap is divided into two equal spaces: from-space and to-space, with objects being copied between them during collection.
+
+\subsection{Memory Layout}
+The initial heap configuration consists of:
+\[
+\begin{aligned}
+\text{heap\_size} &= 1\text{MB} = 1024 \times 1024 \text{ bytes} \\
+\text{heap\_start} &= \text{base address of from-space} \\
+\text{to\_space} &= \text{base address of to-space}
+\end{aligned}
+\]
+
+\subsection{Object Structure}
+Each object in the heap has a header containing its type information. For forwarding pointers during collection:
+\[
+\text{BROKEN\_HEART} = \text{special type indicating forwarded object}
+\]
+
+Object sizes are calculated based on their type:
+\[
+\text{size}(obj) = \begin{cases}
+0 & \text{for INT\_TYPE and NULL\_TYPE} \\
+\text{sizeof}(\text{RArray}) + \text{length} \times \text{sizeof}(\text{intptr\_t}) & \text{for ARRAY\_TYPE} \\
+\text{sizeof}(\text{RClass}) + n_{vars} \times \text{sizeof}(\text{intptr\_t}) & \text{for class instances}
+\end{cases}
+\]
+
+\subsection{Collection Algorithm}
+The collection process follows these steps:
+
+1. \textbf{Initialization}:
+   \[
+   \text{to\_ptr} = \text{to\_space}
+   \]
+
+2. \textbf{Root Set Scanning}: Traverse and copy all objects reachable from:
+   \begin{itemize}
+   \item Global variables
+   \item Stack frames
+   \item Operand stack
+   \end{itemize}
+
+3. \textbf{Forwarding Objects}: When copying an object:
+   \[
+   \text{forward}(obj) = \begin{cases}
+   obj & \text{if not heap pointer or already forwarded} \\
+   \text{copy\_to\_new\_space}(obj) & \text{otherwise}
+   \end{cases}
+   \]
+
+4. \textbf{Scanning Phase}: For each copied object:
+   \begin{itemize}
+   \item Update all internal pointers using forwarding addresses
+   \item Handle different object types (arrays, class instances) appropriately
+   \end{itemize}
+
+\subsection{Heap Management}
+The collector triggers under two conditions:
+\[
+\begin{aligned}
+\text{trigger\_gc if: } & \text{heap\_ptr} + \text{nbytes} > \text{heap\_start} + \text{heap\_size} \\
+\text{or: } & \frac{\text{heap\_ptr} - \text{heap\_start}}{\text{heap\_size}} \times 100 > 90\%
+\end{aligned}
+\]
+
+Heap expansion occurs when:
+\[
+\text{usage\_after\_gc} > 70\% \text{ or insufficient space}
+\]
+
+The expansion doubles the heap size:
+\[
+\text{new\_size} = \text{heap\_size} \ll 1
+\]
+
+\subsection{Memory Allocation}
+The allocation function \texttt{halloc} implements a bump pointer allocator:
+
+1. Align request to 8 bytes:
+   \[
+   \text{aligned\_size} = (n + 7) \& \sim7
+   \]
+
+2. Check space and trigger collection if needed:
+   \[
+   \text{usage} = \frac{\text{heap\_ptr} - \text{heap\_start}}{\text{heap\_size}} \times 100
+   \]
+
+3. Allocate by incrementing bump pointer:
+   \[
+   \begin{aligned}
+   \text{result} &= \text{heap\_ptr} \\
+   \text{heap\_ptr} &= \text{heap\_ptr} + \text{aligned\_size}
+   \end{aligned}
+   \]
+
+This implementation provides efficient memory management while maintaining the simplicity of a copying collector. The automatic heap expansion ensures the system can handle growing memory requirements, while the triggering conditions help maintain optimal performance.
+
+\section{Performance Analysis}
+
+The implementation underwent several optimization phases, with significant performance improvements at each step:
+
+\subsection{Execution Time Comparison}
+\begin{center}
+\begin{tabular}{lcc}
+\hline
+Version & Real Time (s) & Improvement \\
+\hline
+Ast Interpreter & 33.897 & / \\
+Bytecode Interpreter & 33.205 & baseline \\
+With Garbage Collector & 23.110 & 30.4\% \\
+Naive Tagged Primitives & 17.005 & 48.8\% \\
+Magic Tagged Primitives & 14.806 & 55.4\% \\
+\hline
+\end{tabular}
+\end{center}
+
+The most significant improvements came from:
+
+1. \textbf{Garbage Collection}: Reduced execution time by 30.4\% through efficient memory management and reduced system calls (\text{sys} time from 6.832s to 0.030s)
+
+2. \textbf{Tagged Primitives}: Further 35.9\% improvement by eliminating heap allocations for primitive types through:
+   \[
+   \text{tagged\_value} = \begin{cases}
+   n \ll 1 & \text{for integers} \\
+   2 & \text{for null}
+   \end{cases}
+   \]
+
+The final implementation achieves a total performance improvement of 55.4\% compared to the initial version, with negligible system time overhead.
+
+
+\section{Thoughts on Memory Management and Garbage Collection}
+
+\subsection{Bytecode vs AST Interpreter GC}
+Writing a garbage collector for the AST interpreter would be more challenging compared to the bytecode interpreter, for several key reasons:
+
+\begin{itemize}
+\item \textbf{Control}: The bytecode interpreter provides better control over memory layout and execution state. The memory representation is more explicit and structured.
+
+\item \textbf{Clarity}: There is a clearer separation between interpreter structures and program data in the bytecode implementation. This makes it easier to identify what needs to be collected.
+
+\item \textbf{Precision}: Implementing precise garbage collection is more straightforward in the bytecode interpreter due to explicit type information and memory layout.
+
+\item \textbf{State Management}: The explicit stack management in bytecode makes root set identification simpler, as all live references must be either on the stack or in global variables.
+\end{itemize}
+
+\subsection{Array Implementation Analysis}
+The following pseudocode for the ARRAY bytecode instruction contains a critical error:
+
+\begin{verbatim}
+case ARRAY_INS:
+    val init = pop from operand stack
+    val length = pop from operand stack
+    val array = halloc(8 + 8 + 8 * length.value) 
+    // Tag + Len + Slots..
+    array[0] = ARRAY_TAG
+    array[1] = length.value
+    array[2 to 2 + length.value] = init
+    push array to operand stack
+\end{verbatim}
+
+The error lies in the array initialization step. The code attempts to initialize all array slots with a single assignment operation (\texttt{array[2 to 2 + length.value] = init}), which is incorrect. Instead, it should use a loop to explicitly set each slot to the initialization value:
+
+\begin{verbatim}
+for i = 0 to length.value - 1:
+    array[2 + i] = init
+\end{verbatim}
+
+\subsection{GC Performance Considerations}
+
+\subsubsection{Long-Lived Objects}
+The current garbage collection algorithm has inefficiencies when dealing with long-lived objects that contain large amounts of memory:
+
+\begin{itemize}
+\item These objects are repeatedly scanned during each collection cycle
+\item They are unnecessarily moved between generations
+\item This repeated processing wastes computational resources
+\end{itemize}
+
+\subsubsection{Linked List Performance}
+For programs making heavy use of linked lists, particularly long lists of integers, our current garbage collector exhibits several performance issues:
+
+\begin{itemize}
+\item \textbf{Memory Layout}: The collector will compact separate linked lists into a more contiguous memory layout
+\item \textbf{Cache Effects}: While this might seem beneficial for cache performance, it can actually be detrimental
+\item \textbf{Access Patterns}: Linked list traversal patterns may not benefit from the compacted layout
+\item \textbf{Overhead}: The cost of repeatedly moving and adjusting these structures may outweigh any potential benefits
+\end{itemize}
+
+\subsection{Potential Improvements}
+To address these issues, several improvements could be considered:
+
+\begin{itemize}
+\item Implement generational collection with better promotion policies
+\item Add large object space for handling long-lived, large objects
+\item Optimize collection strategies for linked data structures
+\item Consider memory layout patterns that better match access patterns
+\end{itemize}
+
+\section*{References}
+\begin{enumerate}
+\item \textbf{Virtual Machine Design and Implementation}
+    \begin{itemize}
+    \item Smith, J.E. and Nair, R., "Virtual Machines", Morgan Kaufman, 2005.
+    \item Goldberg, A. and Robson, D., "Smalltalk-80: The Language and its Implementation", Addison-Wesley, 1983.
+    \end{itemize}
+
+\item \textbf{Bytecode Interpretation}
+    \begin{itemize}
+    \item Diehl, S., Hartel, P., and Sestoft, P., "Abstract machines for programming language implementation", Future Generation Computer Systems 16, 2000.
+    \item Bell, J.R., "Threaded code", Communications of the ACM 16(6), 1973.
+    \end{itemize}
+
+\item \textbf{Memory Management}
+    \begin{itemize}
+    \item Jones, R., Hosking, A., and Moss, E., "The Garbage Collection Handbook", CRC Press, 2012.
+    \item Ungar, D., "Generation Scavenging: A non-disruptive high performance storage reclamation algorithm", 1984.
+    \end{itemize}
+
+\end{enumerate}
+
+The implementation draws inspiration from various virtual machine designs and techniques documented in these references, particularly in areas of bytecode interpretation, garbage collection, and dynamic compilation.
+
+
+
+\end{document}
+
